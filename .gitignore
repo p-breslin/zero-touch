@@ -1,0 +1,5 @@
+.env
+*.pyc
+/data
+services/.DS_Store
+uv.lock
