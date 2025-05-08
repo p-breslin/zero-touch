@@ -3,6 +3,7 @@ import sys
 import json
 import logging
 import chromadb
+import argparse
 from dotenv import load_dotenv
 from typing import List, Dict, Tuple
 import chromadb.utils.embedding_functions as embedding_functions
@@ -178,7 +179,7 @@ def setup_chroma_db():
     log.info("\nChromaDB setup process finished.")
 
 
-def list_collections():
+def list_collections(show_columns: bool = False):
     """
     Lists all collection and tables in ChromaDB. Trying to connect to a client creates a new database; first check it's existence.
     """
@@ -203,28 +204,75 @@ def list_collections():
                 include=["metadatas"],
             )
 
-            if results and results.get("metadatas"):
-                table_names = sorted(
-                    [
-                        meta["table"]
-                        for meta in results["metadatas"]
-                        if meta and "table" in meta
-                    ]
-                )
-                if table_names:
-                    print("Tables found:")
-                    for table_name in table_names:
-                        print(f"- {table_name}")
+            table_names = sorted(
+                [
+                    meta["table"]
+                    for meta in results["metadatas"]
+                    if meta and "table" in meta
+                ]
+            )
+
+            if show_columns:
+                for table_name in table_names:
+                    print(f"\n  Table: {table_name}")
+
+                    # $and for combining conditions
+                    column_results = collection.get(
+                        where={"$and": [{"type": "column"}, {"table": table_name}]},
+                        include=["metadatas"],
+                    )
+                    column_names = sorted(
+                        [
+                            meta["column"]
+                            for meta in column_results["metadatas"]
+                            if meta and "column" in meta
+                        ]
+                    )
+
+                    for col_name in column_names:
+                        print(f"    - {col_name}")
+            else:
+                print("Tables:")
+                for table_name in table_names:
+                    print(f"- {table_name}")
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        setup_chroma_db()
+    parser = argparse.ArgumentParser(
+        description="Manage ChromaDB Knowledge Base for Schemas."
+    )
+    subparsers = parser.add_subparsers(
+        dest="command", help="Available commands", required=True
+    )
 
-    else:
-        func_name = sys.argv[1]
+    # Runs function for ChromaDB setup
+    parser_setup = subparsers.add_parser(
+        "setup", help="Initialize and populate the ChromaDB collections."
+    )
+    parser_setup.set_defaults(func=setup_chroma_db)
 
-        if func_name in globals() and callable(globals()[func_name]):
-            globals()[func_name]()
-        else:
-            print(f"Function '{func_name}' not found.")
+    # Runs function for listing the collections
+    parser_list = subparsers.add_parser(
+        "list", help="List collections and optionally their tables/columns."
+    )
+    parser_list.add_argument(
+        "--show_columns",
+        action="store_true",
+        help="Include column names under each table in the listing.",
+    )
+    parser_list.set_defaults(func=list_collections)
+
+    # Parse all args
+    args = parser.parse_args()
+    log.info(f"Executing command: {args.command}")
+
+    func_args = vars(args)  # Get arguments as a dictionary
+    command = func_args.pop("command")  # Remove command itself
+    target_func = func_args.pop("func")  # Get the target function
+
+    # Call the function with its specific arguments
+    try:
+        target_func(**func_args)
+    except Exception as e:
+        log.critical(f"Error with command '{command}': {e}", exc_info=True)
+        sys.exit(1)
