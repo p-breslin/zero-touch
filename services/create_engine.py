@@ -44,7 +44,7 @@ def create_db_engine(db_type: str = "duckdb") -> Engine:
         db_path = os.path.join(abs_path, f"../data/{db_name}.duckdb")
         duckdb_url = f"duckdb:///{db_path}"
         try:
-            engine = create_db_engine(duckdb_url)
+            engine = create_engine(duckdb_url)
             log.info("DuckDB engine created.")
             return engine
         except Exception as e:
