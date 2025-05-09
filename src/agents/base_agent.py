@@ -8,7 +8,7 @@ from agno.knowledge.agent import AgentKnowledge
 log = logging.getLogger(__name__)
 
 
-def base_agent(
+def build_base_agent(
     # Core identifiers & components
     name: str,
     model: Any,
@@ -39,7 +39,7 @@ def base_agent(
     Args:
         name: The unique name for this agent instance.
         model: Pre-configured instance of an Agno-compatible model.
-        tools: List of tools or toolkits for the agent to use.
+        tools: Optional list of tools or toolkits for the agent to use.
 
         description: String describing the agent's overall role or persona.
         instructions: List of specific instructions for the agent to follow.
