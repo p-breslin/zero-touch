@@ -13,7 +13,7 @@ setup_logging()
 log = logging.getLogger(__name__)
 
 
-def load_cfg(file, section=None):
+def load_yaml(file, section=None):
     """Loads YAML configuration file."""
     try:
         path = Path(__file__).parent / f"../configs/{file}.yaml"
@@ -23,7 +23,7 @@ def load_cfg(file, section=None):
             else:
                 return yaml.safe_load(f)
     except Exception as e:
-        log.error(f"Error loading the {file} configuration file: {e}")
+        log.error(f"Error loading {file}: {e}")
 
 
 def resolve_model(provider: str, model_id: str):
