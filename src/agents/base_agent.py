@@ -8,7 +8,7 @@ from agno.knowledge.agent import AgentKnowledge
 log = logging.getLogger(__name__)
 
 
-def build_agent(
+def base_agent(
     # Core identifiers & components
     name: str,
     model: Any,
@@ -34,7 +34,7 @@ def build_agent(
     add_datetime_to_instructions: bool = False,
 ) -> Agent:
     """
-    Centralized constructor for building a configured Agno Agent instance.
+    Centralized base structure for building configured Agno Agent instances.
 
     Args:
         name: The unique name for this agent instance.
