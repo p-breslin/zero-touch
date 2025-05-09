@@ -1,0 +1,14 @@
+
+PersonAgent:
+  description: "Infers unique Persons by performing basic identity resolution on GitHub and JIRA user data. Queries database via the SQL tool and uses schema knowledge."
+  provider: "openai"
+  model_id: "gpt-4.1"
+  prompt_key: "person_inference"
+  tool: "SQL"
+  knowledge: true
+  response_model: "PersonList"
+  reasoning: false
+  reasoning_model_id: null
+  debug_mode: true
+  show_tool_calls: true
+  add_datetime_to_instructions: false
