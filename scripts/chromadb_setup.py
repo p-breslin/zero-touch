@@ -9,13 +9,13 @@ from typing import List, Dict, Tuple
 import chromadb.utils.embedding_functions as embedding_functions
 
 
-from utils.helpers import load_cfg
+from utils.helpers import load_yaml
 from utils.logging_setup import setup_logging
 
 
 load_dotenv()
 setup_logging()
-cfg = load_cfg("database_cfg", section="ChromaDB")
+cfg = load_yaml("database_cfg", section="ChromaDB")
 log = logging.getLogger(__name__)
 
 # Paths
