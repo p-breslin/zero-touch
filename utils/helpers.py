@@ -1,7 +1,8 @@
 import os
 import yaml
+import json
 import logging
-from pathlib import Path
+from src.paths import DATA_DIR, CONFIG_DIR
 
 from agno.models.google import Gemini
 from agno.models.openai import OpenAIChat
@@ -16,7 +17,7 @@ log = logging.getLogger(__name__)
 def load_yaml(file, section=None):
     """Loads YAML configuration file."""
     try:
-        path = Path(__file__).parent / f"../configs/{file}.yaml"
+        path = CONFIG_DIR / f"{file}.yaml"
         with open(path, "r") as f:
             if section:
                 return yaml.safe_load(f)[section]
@@ -39,3 +40,52 @@ def resolve_model(provider: str, model_id: str):
             )
     except Exception as e:
         log.error(f"Error loading LLM provider/model: {e}")
+
+
+def validate_response(output_content, response_model, savefile=None):
+    """
+    Validates an agent's structured response against the predefined schema. Response then saved to a JSON file (in test_outputs/ by default).
+    """
+    try:
+        # Convert to JSON if response not structured (like Google)
+        if isinstance(output_content, str):
+            output_content = parse_json(output_content)
+
+        # Ensure JSON object is a Pydantic model instance
+        if not isinstance(output_content, response_model):
+            output_content = response_model(**output_content)
+
+        if savefile:
+            output_path = DATA_DIR / f"{savefile}.json"
+            with open(output_path, "w") as f:
+                json.dump(output_content.model_dump(), f, indent=4)
+                log.info(f"Saved structured output to {output_path}")
+    except IOError as e:
+        log.error(f"Failed to write output file {output_path}: {e}")
+
+    # Handle case if content isn't a Pydantic model
+    except AttributeError:
+        log.warning("Output content does not have model_dump method.")
+
+        # Fallback: try saving raw content
+        try:
+            with open(output_path.with_suffix(".raw.json"), "w") as f:
+                json.dump(output_content, f, indent=4)
+        except Exception:
+            log.error("Could not save raw output content.")
+
+
+def parse_json(json_string: str):
+    """Tries to parse a string as JSON."""
+    try:
+        # Strip whitespace
+        text = json_string.strip()
+
+        # Remove ticks if necessary
+        text = text.strip().strip("`")
+        if text.startswith("json"):
+            text = text[4:].strip()
+
+        return json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return None
