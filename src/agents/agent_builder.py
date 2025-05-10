@@ -8,10 +8,8 @@ from models.response_models import PersonList
 
 from agno.tools.sql import SQLTools
 from agno.knowledge.agent import AgentKnowledge
-from agno.vectordb.chroma.chromadb import ChromaDb
 
 log = logging.getLogger(__name__)
-
 MAPPINGS = {"PersonList": PersonList}
 
 
@@ -19,10 +17,16 @@ def build_agent(
     agent_key: str,
     session_state: Optional[Dict[str, Any]] = None,
     db_engine: Optional[Engine] = None,
-    vector_db: Optional[ChromaDb] = None,
+    knowledge_base: Optional[AgentKnowledge] = None,
 ):
     """
     Builds an agent based on the predefined configuration type.
+
+    Args:
+        agent_key: Selects a specific agent config from the configuration file.
+        session_state: Optional state memory for the agent to reference.
+        db_engine: Optional SQL database engine for the agent to access.
+        knowledge_base: Optional knowledge base for RAG capabilities.
     """
     cfg = load_yaml(file="agents", key=agent_key)
     if not cfg:
@@ -36,7 +40,6 @@ def build_agent(
     description = cfg.get("description", None)
     prompt_key = cfg.get("prompt_key", None)
     response_model = cfg.get("response_model", None)
-    knowledge = cfg.get("knowledge", False)
     reasoning = cfg.get("reasoning", False)
     reasoning_model = cfg.get("reasoning_model", None)
     markdown = cfg.get("markdown", None)
@@ -59,9 +62,6 @@ def build_agent(
 
     # Extract prompt key
     instructions = load_yaml(file="prompts", key=prompt_key)
-
-    # Knowledge base
-    knowledge_base = AgentKnowledge(vector_db=vector_db) if knowledge else None
 
     return build_base_agent(
         name=agent_key,
