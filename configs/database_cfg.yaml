@@ -4,4 +4,3 @@ ChromaDB:
   GITHUB_JSON: "XFLOW_DEV_GITHUB_.json"
   JIRA_JSON: "XFLOW_DEV_JIRA_.json"
   EMBEDDING_MODEL: "text-embedding-3-large"
-  DATA_PATH: "data/"

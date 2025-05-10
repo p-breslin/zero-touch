@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from typing import List, Dict, Tuple
 import chromadb.utils.embedding_functions as embedding_functions
 
-
+from src.paths import DATA_DIR
 from utils.helpers import load_yaml
 from utils.logging_setup import setup_logging
 
@@ -18,10 +18,8 @@ setup_logging()
 cfg = load_yaml("database_cfg", section="ChromaDB")
 log = logging.getLogger(__name__)
 
-# Paths
-abs_path = os.path.dirname(os.path.abspath(__file__))
-DATA_PATH = os.path.join(abs_path, "../", cfg.get("DATA_PATH"))
-CHROMA_PATH = os.path.join(DATA_PATH, "ChromaDB")
+# Directory path
+CHROMA_PATH = DATA_DIR / "ChromaDB"
 
 EMBEDDING_MODEL = cfg.get("EMBEDDING_MODEL")
 GITHUB_COLLECTION = cfg.get("DB_NAME_GITHUB")
@@ -56,7 +54,7 @@ def _load_and_chunk_schema(
     documents = []  # Text chunks to be embedded
     metadatas = []  # Corresponding metadata
 
-    path = os.path.join(DATA_PATH, json_filepath)
+    path = DATA_DIR / json_filepath
     log.info(f"Loading data from: {path}")
     try:
         with open(path, "r", encoding="utf-8") as f:
