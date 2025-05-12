@@ -9,32 +9,32 @@ from typing import List, Dict, Tuple
 import chromadb.utils.embedding_functions as embedding_functions
 
 from src.paths import DATA_DIR
-from utils.helpers import load_yaml
 from utils.logging_setup import setup_logging
 
 
 load_dotenv()
 setup_logging()
-cfg = load_yaml("database_cfg", section="ChromaDB")
 log = logging.getLogger(__name__)
 
 # Directory path
-CHROMA_PATH = DATA_DIR / "ChromaDB"
+CHROMA_PATH = str(DATA_DIR / "ChromaDB")
 
-EMBEDDING_MODEL = cfg.get("EMBEDDING_MODEL")
-GITHUB_COLLECTION = cfg.get("DB_NAME_GITHUB")
-JIRA_COLLECTION = cfg.get("DB_NAME_JIRA")
-GITHUB_JSON = cfg.get("GITHUB_JSON")
-JIRA_JSON = cfg.get("JIRA_JSON")
+# Setup
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")
+CHROMADB_COLLECTION = os.getenv("CHROMADB_COLLECTION")
+SOURCE_FILES = {
+    "github": "XFLOW_DEV_GITHUB_.json",
+    "jira": "XFLOW_DEV_JIRA_.json",
+}
 
 
 def _load_and_chunk_schema(
-    json_filepath: str,
+    json_filename: str, source: str
 ) -> Tuple[List[str], List[str], List[Dict]]:
     """
     Loads schema descriptions from JSON, chunks them, and prepares for ChromaDB.
 
-    The chunking approach creates separate chunks created for tables and their constituent columns.
+    The chunking approach creates separate chunks created for tables and their constituent columns, all for a given Source System (GitHub or Jira).
 
         Table Chunk:
             Provides a high-level overview of the table. Gives the LLM context about the table's general purpose before diving into specific columns. Example RAG queries:
@@ -54,13 +54,13 @@ def _load_and_chunk_schema(
     documents = []  # Text chunks to be embedded
     metadatas = []  # Corresponding metadata
 
-    path = DATA_DIR / json_filepath
+    path = DATA_DIR / json_filename
     log.info(f"Loading data from: {path}")
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except Exception as e:
-        log.critical(f"Error loading {json_filepath}: {e}")
+        log.critical(f"Error loading {json_filename}: {e}")
         raise
 
     schema_name = list(data.keys())[0]
@@ -72,11 +72,14 @@ def _load_and_chunk_schema(
         table_desc = table.get("description")
 
         # Create chunk for TABLE
-        table_id = f"{schema_name}_{table_name}_table"  # Construct unique ID
-        table_text = (
-            f"Schema: {schema_name}, Table: {table_name}, Description: {table_desc}"
-        )
-        table_meta = {"type": "table", "schema": schema_name, "table": table_name}
+        table_id = f"{source}_{schema_name}_{table_name}_table"
+        table_text = f"Source System: {source}, Schema: {schema_name}, Table: {table_name}, Description: {table_desc}"
+        table_meta = {
+            "type": "table",
+            "source_system": source,
+            "schema_name": schema_name,
+            "table": table_name,
+        }
 
         ids.append(table_id)
         documents.append(table_text)
@@ -88,11 +91,12 @@ def _load_and_chunk_schema(
             col_desc = column.get("description")
 
             # Construct unique ID
-            col_id = f"{schema_name}_{table_name}_{col_name}_column"
-            col_text = f"Schema: {schema_name}, Table: {table_name}, Column: {col_name}, Description: {col_desc}"
+            col_id = f"{source}_{schema_name}_{table_name}_{col_name}_column"
+            col_text = f"Source System: {source}, Schema: {schema_name}, Table: {table_name}, Column: {col_name}, Description: {col_desc}"
             col_meta = {
                 "type": "column",
-                "schema": schema_name,
+                "source_system": source,
+                "schema_name": schema_name,
                 "table": table_name,
                 "column": col_name,
             }
@@ -101,13 +105,13 @@ def _load_and_chunk_schema(
             documents.append(col_text)
             metadatas.append(col_meta)
 
-    log.info(f"Prepared {len(ids)} chunks for {schema_name}.")
+    log.info(f"{len(ids)} chunks for {schema_name} (Source: {source}).")
     return ids, documents, metadatas
 
 
 def setup_chroma_db():
     """
-    Initializes a persistent ChromaDB client, creates collections for GitHub and JIRA schema descriptions, and populates them with embeddings.
+    Initializes a persistent ChromaDB client, creates a single unified collection of schema descriptions for both System Sources (GitHub and JIRA), and populates them with OpenAI embeddings.
     """
     if not os.path.exists(CHROMA_PATH):
         try:
@@ -133,34 +137,27 @@ def setup_chroma_db():
         log.critical(f"Failed to initialize OpenAI embedding function: {e}")
         raise
 
-    # Process Collections
-    collections_to_process = [
-        {"name": GITHUB_COLLECTION, "json_path": GITHUB_JSON},
-        {"name": JIRA_COLLECTION, "json_path": JIRA_JSON},
-    ]
+    # Create the single unified collection
+    try:
+        log.info(f"Creating collection: {CHROMADB_COLLECTION}")
+        collection = client.get_or_create_collection(
+            name=CHROMADB_COLLECTION,
+            embedding_function=embedding_func,
+            metadata={"hnsw:space": "cosine"},  # Default for semantic search
+        )
+        log.info(f"Unified collection '{CHROMADB_COLLECTION}' ready.")
+    except Exception as e:
+        log.error(f"Failed to create collection '{CHROMADB_COLLECTION}': {e}")
+        raise
 
-    for collection_info in collections_to_process:
-        collection_name = collection_info["name"]
-        json_path = collection_info["json_path"]
-        log.info(f"\n--- Processing Collection: {collection_name} ---")
+    # Process each source file and add to the single collection
+    for source, json_filename in SOURCE_FILES.items():
+        log.info(f"Loading and adding {source} data ({json_filename})")
+        ids, documents, metadatas = _load_and_chunk_schema(json_filename, source)
 
-        # Create the collection
-        try:
-            log.info(f"Creating collection: {collection_name}")
-            collection = client.get_or_create_collection(
-                name=collection_name,
-                embedding_function=embedding_func,
-                metadata={"hnsw:space": "cosine"},  # Default for semantic search
-            )
-            log.info(f"Collection '{collection_name}' ready.")
-        except Exception as e:
-            log.error(f"Failed to create collection '{collection_name}': {e}")
-            raise
-
-        # Load, Chunk, and Add the data
-        ids, documents, metadatas = _load_and_chunk_schema(json_path)
-
-        log.info(f"Adding {len(ids)} docs to collection '{collection_name}'")
+        log.info(
+            f"Adding {len(ids)} docs from {source} into collection '{CHROMADB_COLLECTION}'"
+        )
         try:
             collection.upsert(
                 ids=ids,
@@ -169,9 +166,13 @@ def setup_chroma_db():
                 # Embeddings are generated automatically by ChromaDB
                 # when using an embedding_function with the collection
             )
-            log.info(f"Successfully added documents in '{collection_name}'.")
+            log.info(
+                f"Successfully added documents from {source} into '{CHROMADB_COLLECTION}'."
+            )
         except Exception as e:
-            log.error(f"ERROR adding documents to '{collection_name}': {e}")
+            log.error(
+                f"ERROR adding documents from {source} into '{CHROMADB_COLLECTION}': {e}"
+            )
             raise
 
     log.info("\nChromaDB setup process finished.")
@@ -183,56 +184,54 @@ def list_collections(show_columns: bool = False):
     """
     try:
         client = chromadb.PersistentClient(path=CHROMA_PATH)
-        collections = client.list_collections()
     except Exception as e:
         log.critical(f"Critical error loading database: {e}")
+        return
 
-    collection_names = [c.name for c in collections]
-    target_collections = {"GitHub": GITHUB_COLLECTION, "Jira": JIRA_COLLECTION}
+    collection = client.get_collection(name=CHROMADB_COLLECTION)
+    log.info(f"Total docs in '{CHROMADB_COLLECTION}': {collection.count()}")
 
-    for schema_label, collection_name in target_collections.items():
-        print(f"\nSchema: {schema_label} (Collection: {collection_name})")
+    # Group by source system for display
+    for source in SOURCE_FILES.keys():
+        print(f"\nSource System: {source.upper()}")
+        results = collection.get(
+            where={"$and": [{"type": "table"}, {"source_system": source}]},
+            include=["metadatas"],
+        )
+        table_metas = sorted(results["metadatas"], key=lambda x: x.get("table", ""))
 
-        if collection_name in collection_names:
-            collection = client.get_collection(name=collection_name)
+        current_schema_name = None
+        for meta in table_metas:
+            schema_name = meta["schema_name"]
+            table_name = meta["table"]
 
-            # Query for docs (metadata indicates a table description)
-            results = collection.get(
-                where={"type": "table"},
-                include=["metadatas"],
-            )
+            if schema_name != current_schema_name:
+                print(f"Schema: {schema_name}")
+                current_schema_name = schema_name
 
-            table_names = sorted(
-                [
-                    meta["table"]
-                    for meta in results["metadatas"]
-                    if meta and "table" in meta
-                ]
-            )
+            print(f"Table: {table_name}")
 
             if show_columns:
-                for table_name in table_names:
-                    print(f"\n  Table: {table_name}")
-
-                    # $and for combining conditions
-                    column_results = collection.get(
-                        where={"$and": [{"type": "column"}, {"table": table_name}]},
-                        include=["metadatas"],
-                    )
-                    column_names = sorted(
-                        [
-                            meta["column"]
-                            for meta in column_results["metadatas"]
-                            if meta and "column" in meta
+                column_results = collection.get(
+                    where={
+                        "$and": [
+                            {"type": "column"},
+                            {"source_system": source},
+                            {"schema_name": schema_name},
+                            {"table": table_name},
                         ]
+                    },
+                    include=["metadatas"],
+                )
+                if column_results and column_results.get("metadatas"):
+                    column_metas = sorted(
+                        column_results["metadatas"], key=lambda x: x.get("column", "")
                     )
-
-                    for col_name in column_names:
-                        print(f"    - {col_name}")
-            else:
-                print("Tables:")
-                for table_name in table_names:
-                    print(f"- {table_name}")
+                    for col_meta in column_metas:
+                        if col_meta and "column" in col_meta:
+                            print(f"      - {col_meta['column']}")
+                else:
+                    print(f"No columns found for table '{table_name}'.")
 
 
 if __name__ == "__main__":
