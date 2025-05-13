@@ -63,7 +63,7 @@ def build_agent(
     selected_tools = [SQLTools(db_engine=db_engine)] if tools else []
 
     # Extract prompt key
-    instructions = load_yaml(file="prompts", key=prompt_key)
+    instructions = load_yaml(file="instructions", key=prompt_key)
 
     return build_base_agent(
         name=agent_key,
