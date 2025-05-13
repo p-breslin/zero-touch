@@ -1,0 +1,16 @@
+planner_query: >
+  Create a detailed plan to retrieve all necessary user identification data from GitHub and JIRA sources. 
+  For tables not defining user names or aliases, **limit the results to 10 records** for each table. 
+  Include appropriate SQL query hints before applying the limit.
+
+sql_query: >
+  Execute the following SQL plan accurately based on its structure:
+    ```json
+    {sql_plan}
+    ```
+
+identity_query: >
+  Perform identity resolution based on the following data. Data:
+    ```json
+    {sql_results}
+    ```
