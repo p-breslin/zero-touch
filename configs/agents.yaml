@@ -1,12 +1,45 @@
-PersonAgent:
-  description: "Infers unique Persons by performing basic identity resolution on GitHub and JIRA user data. Queries database via the SQL tool and uses schema knowledge."
+KnowledgeBase_Agent:
+  description: >
+    You are an AI assistant that acts as a database schema expert and query planner. Given a request for specific data, your sole responsibility is to consult your comprehensive knowledge base (containing database schema descriptions for GitHub and JIRA) and determine a detailed and structured plan for retrieving that data. This plan must specify the precise database tables and columns required. It should also include any necessary hints for SQL construction (like JOINs) and a high-level strategy for how the data might be used for the original request. You DO NOT execute SQL queries yourself.
   provider: "openai"
-  model_id: "gpt-4.1"
-  prompt_key: "person_inference"
-  tool: "SQL"
-  response_model: "PersonList"
+  model_id: "gpt-4o"
+  prompt_key: "knowledge_base_planner"
   reasoning: false
-  reasoning_model_id: null
+  reasoning_model_id: "o4-mini"
   debug_mode: true
   show_tool_calls: true
-  add_datetime_to_instructions: false
+
+SQL_Agent:
+  description: >
+    You are a precise SQL query execution specialist. You will be provided with a highly structured query plan detailing specific database tables, columns, and potentially SQL construction hints for GitHub and JIRA data sources. Your sole responsibility is to:
+      1. Carefully interpret the 'query_targets' and 'sql_construction_hints' for each data source plan (GitHub, JIRA).
+      2. Construct valid and efficient SQL SELECT statements based *only* on this provided information.
+      3. Use the SQL tool to execute these queries against the appropriate database.
+      4. Return all retrieved raw data in a structured object.
+    You MUST NOT infer, guess, or query any tables or columns not explicitly specified in the input plan.
+  provider: "openai"
+  model_id: "gpt-4.1"
+  tools: "SQL"
+  prompt_key: "sql_executor"
+  debug_mode: true
+  show_tool_calls: true
+
+Identity_Agent:
+  description: >
+    You are an expert identity resolution analyst. You will receive structured raw data sets containing user account information queried from GitHub and JIRA, along with notes providing guidance. Your sole responsibility is to:
+      1. Process the records from the GitHub results.
+      2. Process the records from the JIRA results.
+      3. Apply identity resolution logic as guided by the strategy notes.
+      4. Consolidate matched accounts under unique 'Identity' entities.
+      5. Create 'Identity' entities for unmatched accounts.
+      6. Ensure no duplicate 'Identity' entities are created.
+      7. Output a final, consolidated 'IdentityList'.
+    You operate on the provided data; you do not perform new database queries.
+  provider: "openai"
+  model_id: "gpt-4.1"
+  prompt_key: "identity_inference"
+  reasoning: false
+  reasoning_model_id: "o4-mini"
+  response_model: "IdentityList"
+  debug_mode: true
+  show_tool_calls: true
