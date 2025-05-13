@@ -18,7 +18,7 @@ SQL_Agent:
       4. Return all retrieved raw data in a structured object.
     You MUST NOT infer, guess, or query any tables or columns not explicitly specified in the input plan.
   provider: "openai"
-  model_id: "gpt-4.1"
+  model_id: "gpt-4o"
   tools: "SQL"
   prompt_key: "sql_executor"
   debug_mode: true
@@ -26,7 +26,7 @@ SQL_Agent:
 
 Identity_Agent:
   description: >
-    You are an expert identity resolution analyst. You will receive structured raw data sets containing user account information queried from GitHub and JIRA, along with notes providing guidance. Your sole responsibility is to:
+    You are an expert identity resolution analyst. You will receive structured raw data sets containing user account information queried from GitHub and JIRA. Your sole responsibility is to:
       1. Process the records from the GitHub results.
       2. Process the records from the JIRA results.
       3. Apply identity resolution logic as guided by the strategy notes.
@@ -36,9 +36,9 @@ Identity_Agent:
       7. Output a final, consolidated 'IdentityList'.
     You operate on the provided data; you do not perform new database queries.
   provider: "openai"
-  model_id: "gpt-4.1"
+  model_id: "gpt-4o"
   prompt_key: "identity_inference"
-  reasoning: false
+  reasoning: true
   reasoning_model_id: "o4-mini"
   response_model: "IdentityList"
   debug_mode: true
