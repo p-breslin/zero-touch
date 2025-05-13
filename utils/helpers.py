@@ -14,30 +14,41 @@ setup_logging()
 log = logging.getLogger(__name__)
 
 
-def load_yaml(file, section=None):
+def load_yaml(file, key=None):
     """Loads YAML configuration file."""
     try:
         path = CONFIG_DIR / f"{file}.yaml"
         with open(path, "r") as f:
-            if section:
-                return yaml.safe_load(f)[section]
+            if key:
+                return yaml.safe_load(f)[key]
             else:
                 return yaml.safe_load(f)
     except Exception as e:
         log.error(f"Error loading {file}: {e}")
 
 
-def resolve_model(provider: str, model_id: str):
+def resolve_model(provider: str, model_id: str, reasoning: bool = False):
     """Selects LLM provider and model."""
     try:
         if provider == "openai":
-            return OpenAIChat(id=model_id, temperature=0)
+            if reasoning:
+                return OpenAIChat(id=model_id)
+            else:
+                return OpenAIChat(id=model_id, temperature=0)
+
         elif provider == "google":
-            return Gemini(id=model_id, temperature=0)
+            if reasoning:
+                return Gemini(id=model_id)
+            else:
+                return Gemini(id=model_id, temperature=0)
+
         elif provider == "openrouter":
-            return OpenRouter(
-                id=model_id, api_key=os.getenv("OPENROUTER_API_KEY"), temperature=0
-            )
+            if reasoning:
+                return OpenRouter(id=model_id, api_key=os.getenv("OPENROUTER_API_KEY"))
+            else:
+                return OpenRouter(
+                    id=model_id, api_key=os.getenv("OPENROUTER_API_KEY"), temperature=0
+                )
     except Exception as e:
         log.error(f"Error loading LLM provider/model: {e}")
 
@@ -60,6 +71,8 @@ def validate_response(output_content, response_model, savefile=None):
             with open(output_path, "w") as f:
                 json.dump(output_content.model_dump(), f, indent=4)
                 log.info(f"Saved structured output to {output_path}")
+
+        return output_content
     except IOError as e:
         log.error(f"Failed to write output file {output_path}: {e}")
 
@@ -73,6 +86,7 @@ def validate_response(output_content, response_model, savefile=None):
                 json.dump(output_content, f, indent=4)
         except Exception:
             log.error("Could not save raw output content.")
+            return None
 
 
 def parse_json(json_string: str):
