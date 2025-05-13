@@ -2,15 +2,15 @@ import logging
 from sqlalchemy import Engine
 from typing import Any, Dict, Optional
 
-from utils.helpers import load_yaml, resolve_model
 from agents.base_agent import build_base_agent
-from models.response_models import PersonList
+from utils.helpers import load_yaml, resolve_model
+from models.response_models import SQLPlan, SQLResults, IdentityList
 
 from agno.tools.sql import SQLTools
 from agno.knowledge.agent import AgentKnowledge
 
 log = logging.getLogger(__name__)
-MAPPINGS = {"PersonList": PersonList}
+MAPPINGS = {"SQLPlan": SQLPlan, "SQLResults": SQLResults, "IdentityList": IdentityList}
 
 
 def build_agent(
@@ -36,12 +36,12 @@ def build_agent(
     # Load configuration params
     model_id = cfg.get("model_id", None)
     provider = cfg.get("provider", "openai")
-    tool = cfg.get("tool", None)
+    tools = cfg.get("tools", None)
     description = cfg.get("description", None)
     prompt_key = cfg.get("prompt_key", None)
     response_model = cfg.get("response_model", None)
     reasoning = cfg.get("reasoning", False)
-    reasoning_model = cfg.get("reasoning_model", None)
+    reasoning_model_id = cfg.get("reasoning_model_id", None)
     markdown = cfg.get("markdown", None)
     debug_mode = cfg.get("debug_mode", False)
     show_tool_calls = cfg.get("show_tool_calls", False)
@@ -53,12 +53,14 @@ def build_agent(
     response_model = MAPPINGS.get(response_model, None)
     LLM_base_model = resolve_model(provider=provider, model_id=model_id)
     if reasoning:
-        LLM_reasoning_model = resolve_model(provider=provider, model_id=reasoning_model)
+        LLM_reasoning_model = resolve_model(
+            provider=provider, model_id=reasoning_model_id, reasoning=True
+        )
     else:
         LLM_reasoning_model = None
 
     # Resolve tools
-    tools = [SQLTools(db_engine=db_engine)] if tool else []
+    selected_tools = [SQLTools(db_engine=db_engine)] if tools else []
 
     # Extract prompt key
     instructions = load_yaml(file="prompts", key=prompt_key)
@@ -66,7 +68,7 @@ def build_agent(
     return build_base_agent(
         name=agent_key,
         model=LLM_base_model,
-        tools=tools,
+        tools=selected_tools,
         description=description,
         instructions=instructions,
         response_model=response_model,
