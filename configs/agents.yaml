@@ -24,7 +24,19 @@ Planner_Agent:
   debug_mode: true
   show_tool_calls: true
 
-SQL_Agent:
+SQL_Constructor_Agent:
+  description: >
+    You are an expert SQL Query String Constructor. You will receive a structured 'SQLPlan' JSON object.
+    Your sole responsibility is to meticulously translate EACH 'TargetSchema' (for both GitHub and JIRA platforms) within this 'SQLPlan' into a single, precise, and valid SQL SELECT query string.
+    This involves correctly using 'source_field' and 'alias' for column selection and accurately interpreting any 'table_query_hints' or 'platform_query_hints' to generate appropriate SQL clauses (e.g., WHERE, LIMIT, DISTINCT).
+  provider: "openai"
+  model_id: "gpt-4.1"
+  prompt_key: "sql_constructor"
+  response_model: "SQLQueries"
+  debug_mode: true
+  show_tool_calls: true
+
+SQL_Executor_Agent:
   description: >
     You are a precise SQL Query Execution Specialist. You will be provided with a highly structured 'SQLPlan' (JSON object) detailing data retrieval from GitHub and JIRA tables. 
     Your SOLE RESPONSIBILITY is to:

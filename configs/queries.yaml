@@ -12,7 +12,17 @@ planner_query: >
     {schema_info}
     ```
 
-sql_query: >
+sql_constructor_query: >
+  You are an SQL Query String Constructor. Based on your detailed instructions and the following 'SQLPlan' JSON object, generate a list of precise, executable SQL SELECT query strings.
+  Ensure each query corresponds to a table in the plan, correctly applies column selections with aliases, and translates any query hints into valid, generally ANSI-compliant SQL clauses.
+  Your output MUST be a JSON object conforming to the 'SQLQueries' structure, including carrying forward the 'plan_summary' and 'strategy_notes'.
+
+  Input SQLPlan:
+    ```json
+    {sql_plan}
+    ```
+
+sql_executor_query: >
   You are a SQL Query Execution Specialist. Your input is a detailed 'SQLPlan' JSON object.
   Your task is to:
   1. Meticulously follow your detailed instructions to process BOTH the 'github' and 'jira' sections of the provided 'SQLPlan'.
