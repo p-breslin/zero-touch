@@ -43,7 +43,7 @@ SQL_Executor_Agent:
       3. Return the raw data result (list of rows) exactly as provided by the tool.
     You DO NOT construct, modify, or interpret the SQL in any way. You are purely an execution engine for one query.
   provider: "openai"
-  model_id: "gpt-4.1-mini"
+  model_id: "gpt-4.1-nano"
   tools: "SQL"
   prompt_key: "sql_executor"
   debug_mode: true
@@ -59,7 +59,7 @@ Aggregator_Agent:
     You perform NO data transformation on the rows themselves, only collection and grouping.
   provider: "openai"
   model_id: "gpt-4.1-mini"
-  prompt_key: "aggregator"
+  prompt_key: "data_aggregator"
   response_model: "AggregatedData"
   debug_mode: true
 

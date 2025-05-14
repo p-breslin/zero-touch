@@ -4,14 +4,31 @@ from typing import Any, Dict, Optional
 
 from agents.base_agent import build_base_agent
 from utils.helpers import load_yaml, resolve_model
-from models import SQLPlan, SQLResults, IdentityList
 
 from agno.tools.sql import SQLTools
 from agno.tools.thinking import ThinkingTools
 from agno.knowledge.agent import AgentKnowledge
 
+from models import (
+    KBInfo,
+    SQLPlan,
+    SQLQueries,
+    SQLQuery,
+    SingleTableResult,
+    AggregatorInput,
+    AggregatedData,
+)
+
 log = logging.getLogger(__name__)
-MAPPINGS = {"SQLPlan": SQLPlan, "SQLResults": SQLResults, "IdentityList": IdentityList}
+MAPPINGS = {
+    "KBInfo": KBInfo,
+    "SQLPlan": SQLPlan,
+    "SQLQueries": SQLQueries,
+    "SQLQuery": SQLQuery,
+    "SingleTableResult": SingleTableResult,
+    "AggregatorInput": AggregatorInput,
+    "AggregatedData": AggregatedData,
+}
 
 
 def build_agent(
