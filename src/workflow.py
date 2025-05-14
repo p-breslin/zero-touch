@@ -14,7 +14,7 @@ from utils.helpers import validate_response, load_yaml
 from agents.agent_builder import build_agent
 from utils.logging_setup import setup_logging
 from services.create_engine import create_db_engine
-from models.response_models import SQLPlan, SQLResults, IdentityList
+from models import SQLPlan, SQLResults, IdentityList
 
 
 load_dotenv()
