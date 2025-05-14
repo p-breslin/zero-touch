@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 
 from agents.base_agent import build_base_agent
 from utils.helpers import load_yaml, resolve_model
-from models.response_models import SQLPlan, SQLResults, IdentityList
+from models import SQLPlan, SQLResults, IdentityList
 
 from agno.tools.sql import SQLTools
 from agno.knowledge.agent import AgentKnowledge
