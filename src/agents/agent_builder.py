@@ -7,6 +7,7 @@ from utils.helpers import load_yaml, resolve_model
 from models import SQLPlan, SQLResults, IdentityList
 
 from agno.tools.sql import SQLTools
+from agno.tools.thinking import ThinkingTools
 from agno.knowledge.agent import AgentKnowledge
 
 log = logging.getLogger(__name__)
@@ -42,6 +43,7 @@ def build_agent(
     response_model = cfg.get("response_model", None)
     reasoning = cfg.get("reasoning", False)
     reasoning_model_id = cfg.get("reasoning_model_id", None)
+    thinking_tools = cfg.get("thinking_tools", None)
     markdown = cfg.get("markdown", None)
     debug_mode = cfg.get("debug_mode", False)
     show_tool_calls = cfg.get("show_tool_calls", False)
@@ -61,6 +63,8 @@ def build_agent(
 
     # Resolve tools
     selected_tools = [SQLTools(db_engine=db_engine)] if tools else []
+    if thinking_tools:
+        selected_tools.append(ThinkingTools(add_instructions=True))
 
     # Extract prompt key
     instructions = load_yaml(file="instructions", key=prompt_key)
