@@ -1,7 +1,16 @@
+knowledgebase_query: >
+  I need to plan SQL queries to extract all user identifying information from GitHub and JIRA.
+  What schema details (tables, columns) should I be aware of from both platforms? 
+  Retrieve this information from the knowledge base.
+
 planner_query: >
-  Create a detailed plan to retrieve all necessary user identification data from GitHub and JIRA sources. 
-  For tables not defining user names or aliases, **limit the results to 10 records** for each table. 
-  Include appropriate SQL query hints before applying the limit.
+  High-level Data Goal: Devise a comprehensive data retrieval strategy to identify unique individuals by collecting all relevant user identification attributes from our GitHub and JIRA data sources.
+  Consider strategies for large tables (distinct user IDs, time-scoping).
+  Based EXCLUSIVELY on the 'Provided Schema Information' and the 'High-level Data Goal', generate the 'SQLPlan' JSON object.
+  Provided Schema Information:
+    ```json
+    {schema_info}
+    ```
 
 sql_query: >
   Execute the following SQL plan accurately based on its structure:
