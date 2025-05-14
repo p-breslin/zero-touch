@@ -13,7 +13,17 @@ planner_query: >
     ```
 
 sql_query: >
-  Execute the following SQL plan accurately based on its structure:
+  You are a SQL Query Execution Specialist. Your input is a detailed 'SQLPlan' JSON object.
+  Your task is to:
+  1. Meticulously follow your detailed instructions to process BOTH the 'github' and 'jira' sections of the provided 'SQLPlan'.
+  2. For EACH table specified in the plan, construct the appropriate SQL SELECT statement based on the 'columns' (using 'source_field' and 'alias') and any 'table_query_hints' or 'platform_query_hints'.
+  3. Execute EACH generated SQL query using the 'SQL execution tool'.
+  4. Aggregate ALL results from all queries.
+  5. Return a single JSON object strictly conforming to the 'SQLResults' structure, containing all retrieved data under 'github' and 'jira' keys within the 'results' object.
+
+  Strictly adhere to the plan and your instructions. Do not infer or deviate.
+
+  SQLPlan to execute:
     ```json
     {sql_plan}
     ```

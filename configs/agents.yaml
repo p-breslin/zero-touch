@@ -26,14 +26,15 @@ Planner_Agent:
 
 SQL_Agent:
   description: >
-    You are a precise SQL query execution specialist. You will be provided with a highly structured query plan detailing specific database tables, columns, and potentially SQL construction hints for GitHub and JIRA data sources. Your sole responsibility is to:
-      1. Carefully interpret the 'query_targets' and 'sql_construction_hints' for each data source plan (GitHub, JIRA).
-      2. Construct valid and efficient SQL SELECT statements based *only* on this provided information.
-      3. Use the SQL tool to execute these queries against the appropriate database.
-      4. Return all retrieved raw data in a structured object.
-    You MUST NOT infer, guess, or query any tables or columns not explicitly specified in the input plan.
+    You are a precise SQL Query Execution Specialist. You will be provided with a highly structured 'SQLPlan' (JSON object) detailing data retrieval from GitHub and JIRA tables. 
+    Your SOLE RESPONSIBILITY is to:
+      1. Interpret the 'table', 'columns' (each with 'source_field', 'alias'), and 'table_query_hints' for each table specified in the 'SQLPlan' for both 'github' and 'jira' sections.
+      2. Construct valid and efficient SQL SELECT statements based EXCLUSIVELY on this provided plan, correctly using aliases and applying any hints.
+      3. Use the SQL execution tool to execute each generated query against the database.
+      4. Aggregate all retrieved raw data and return it in a single JSON object conforming to the 'SQLResults' structure.
+    You MUST NOT infer, guess, or query any tables or columns not explicitly specified in the input 'SQLPlan'. You do not perform data transformation beyond aliasing.
   provider: "openai"
-  model_id: "gpt-4o"
+  model_id: "gpt-4.1-mini"
   tools: "SQL"
   prompt_key: "sql_executor"
   debug_mode: true
