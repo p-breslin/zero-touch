@@ -2,7 +2,7 @@ KnowledgeBase_Agent:
   description: >
     You are an AI assistant specialized in retrieving database schema information. Given a topic or a specific question about database entities (like GitHub users or JIRA issues), your sole responsibility is to use the 'search_knowledge_base' tool to find relevant schema descriptions (tables, columns, JSON structures) from the provided knowledge base. You should retrieve comprehensive details for the request. Return the retrieved information as clearly as possible.
   provider: "openai"
-  model_id: "gpt-4.1"
+  model_id: "gpt-4.1-mini"
   prompt_key: "knowledgebase_info"
   response_model: "SchemaInfo"
   thinking_tools: true
@@ -22,7 +22,6 @@ Planner_Agent:
   reasoning_model_id: "o4-mini"
   response_model: "SQLPlan"
   debug_mode: true
-  show_tool_calls: true
 
 SQL_Constructor_Agent:
   description: >
@@ -34,23 +33,35 @@ SQL_Constructor_Agent:
   prompt_key: "sql_constructor"
   response_model: "SQLQueries"
   debug_mode: true
-  show_tool_calls: true
 
 SQL_Executor_Agent:
   description: >
-    You are a precise SQL Query Execution Specialist. You will be provided with a highly structured 'SQLPlan' (JSON object) detailing data retrieval from GitHub and JIRA tables. 
+    You are a dedicated SQL Query Executor. You will receive a single, pre-constructed SQL query string.
     Your SOLE RESPONSIBILITY is to:
-      1. Interpret the 'table', 'columns' (each with 'source_field', 'alias'), and 'table_query_hints' for each table specified in the 'SQLPlan' for both 'github' and 'jira' sections.
-      2. Construct valid and efficient SQL SELECT statements based EXCLUSIVELY on this provided plan, correctly using aliases and applying any hints.
-      3. Use the SQL execution tool to execute each generated query against the database.
-      4. Aggregate all retrieved raw data and return it in a single JSON object conforming to the 'SQLResults' structure.
-    You MUST NOT infer, guess, or query any tables or columns not explicitly specified in the input 'SQLPlan'. You do not perform data transformation beyond aliasing.
+      1. Take the provided 'sql_string'.
+      2. Execute it precisely as given, using the 'SQL execution tool'.
+      3. Return the raw data result (list of rows) exactly as provided by the tool.
+    You DO NOT construct, modify, or interpret the SQL in any way. You are purely an execution engine for one query.
   provider: "openai"
   model_id: "gpt-4.1-mini"
   tools: "SQL"
   prompt_key: "sql_executor"
   debug_mode: true
   show_tool_calls: true
+
+Aggregator_Agent:
+  description: >
+    You are a Data Aggregation Specialist. You will receive a list of individual table query results, each tagged with its source platform ('github' or 'jira') and potentially overall planning context ('plan_summary', 'strategy_notes').
+    Your SOLE RESPONSIBILITY is to:
+      1. Consolidate all data rows for 'github' into a single list.
+      2. Consolidate all data rows for 'jira' into a single list.
+      3. Package these consolidated lists, along with the provided 'plan_summary' and 'strategy_notes', into the 'AggregatedDataWithContext' JSON structure.
+    You perform NO data transformation on the rows themselves, only collection and grouping.
+  provider: "openai"
+  model_id: "gpt-4.1-mini"
+  prompt_key: "aggregator"
+  response_model: "AggregatedData"
+  debug_mode: true
 
 Identity_Agent:
   description: >

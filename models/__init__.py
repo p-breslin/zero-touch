@@ -1,13 +1,18 @@
-from .schema_models import SchemaInfo
+from .knowledgebase_models import KBInfo
 from .planner_models import SQLPlan
-from .sql_models import SQLResults
+from .sql_constructor_models import SQLQuery, SQLQueries
+from .aggregator_models import SingleTableResult, AggregatorInput, AggregatedData
 from .identity_models import Identity, IdentityList
 
 
 __all__ = [
-    "SchemaInfo",
+    "KBInfo",
     "SQLPlan",
-    "SQLResults",
+    "SQLQuery",
+    "SQLQueries",
+    "SingleTableResult",
+    "AggregatorInput",
+    "AggregatedData",
     "Identity",
     "IdentityList",
 ]

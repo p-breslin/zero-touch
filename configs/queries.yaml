@@ -9,7 +9,7 @@ planner_query: >
   Based EXCLUSIVELY on the 'Provided Schema Information' and the 'High-level Data Goal', generate the 'SQLPlan' JSON object.
   Provided Schema Information:
     ```json
-    {schema_info}
+    {knowledgebase_info}
     ```
 
 sql_constructor_query: >
@@ -19,23 +19,27 @@ sql_constructor_query: >
 
   Input SQLPlan:
     ```json
-    {sql_plan}
+    {sql_plan_json}
     ```
 
 sql_executor_query: >
-  You are a SQL Query Execution Specialist. Your input is a detailed 'SQLPlan' JSON object.
-  Your task is to:
-  1. Meticulously follow your detailed instructions to process BOTH the 'github' and 'jira' sections of the provided 'SQLPlan'.
-  2. For EACH table specified in the plan, construct the appropriate SQL SELECT statement based on the 'columns' (using 'source_field' and 'alias') and any 'table_query_hints' or 'platform_query_hints'.
-  3. Execute EACH generated SQL query using the 'SQL execution tool'.
-  4. Aggregate ALL results from all queries.
-  5. Return a single JSON object strictly conforming to the 'SQLResults' structure, containing all retrieved data under 'github' and 'jira' keys within the 'results' object.
+  You are a SQL Query Execution Specialist. Execute the following SQL query using your SQL execution tool and return the raw results.
 
-  Strictly adhere to the plan and your instructions. Do not infer or deviate.
-
-  SQLPlan to execute:
+  SQL Query to Execute:
     ```json
-    {sql_plan}
+    {sql_query_json}
+    ```
+
+aggregator_query: >
+  You are a Data Aggregation Specialist.
+  Your task is to process the provided 'AggregatorInput' JSON object, which contains a list of table query results.
+  Aggregate all rows for the 'github' platform into one list and all rows for the 'jira' platform into another list.
+  Also, carry forward the 'plan_summary' and 'strategy_notes' from the input.
+  Return a single JSON object strictly conforming to the 'AggregatedData' structure as detailed in your instructions.
+
+  Input Data (`AggregatorInput` format):
+    ```json
+    {aggregator_input_json}
     ```
 
 identity_query: >
