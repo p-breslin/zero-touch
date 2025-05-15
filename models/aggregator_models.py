@@ -14,18 +14,6 @@ class SingleTableResult(BaseModel):
     )
 
 
-class AggregatorInput(BaseModel):
-    table_results: List[SingleTableResult] = Field(
-        ..., description="A list of results, each from a single table query."
-    )
-    plan_summary: Optional[str] = Field(
-        None, description="Original plan summary, passed through for context."
-    )
-    strategy_notes: Optional[str] = Field(
-        None, description="Original strategy notes, passed through for context."
-    )
-
-
 class SQLResults(BaseModel):
     results: Dict[str, List[Dict[str, Any]]] = Field(
         default_factory=lambda: {"github": [], "jira": []},

@@ -30,18 +30,6 @@ sql_executor_query: >
     {sql_query_json}
     ```
 
-aggregator_query: >
-  You are a Data Aggregation Specialist.
-  Your task is to process the provided 'AggregatorInput' JSON object, which contains a list of table query results.
-  Aggregate all rows for the 'github' platform into one list and all rows for the 'jira' platform into another list.
-  Also, carry forward the 'plan_summary' and 'strategy_notes' from the input.
-  Return a single JSON object strictly conforming to the 'AggregatedData' structure as detailed in your instructions.
-
-  Input Data (`AggregatorInput` format):
-    ```json
-    {aggregator_input_json}
-    ```
-
 identity_query: >
   Perform identity resolution based on the following data. Data:
     ```json

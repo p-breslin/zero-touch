@@ -3,7 +3,7 @@ import json
 import asyncio
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Coroutine, AsyncIterator, Sequence
+from typing import Any, Dict, List, Coroutine, AsyncIterator, Sequence
 
 from dotenv import load_dotenv
 
@@ -24,7 +24,7 @@ from models import (
     SQLQueries,
     SQLQuery,
     SingleTableResult,
-    AggregatorInput,
+    SQLResults,
     AggregatedData,
 )
 
@@ -206,36 +206,46 @@ class Pipeline(Workflow):
             t.model_dump() for t in table_results
         ]
         yield RunResponse(
-            event="SQL_Execution_Agent_complete",
+            event="SQL_Executor_Agent_complete",
             content=f"{len(table_results)} tables fetched",
             run_id=self.run_id,
             session_id=self.session_id,
         )
 
-        # 5. Aggregation Agent -------------------------------------------------
-        agg_query = queries["aggregator_query"].format(
-            aggregator_input_json=AggregatorInput(
-                table_results=table_results
-            ).model_dump_json(indent=2)
+        # 5. Aggregation (Orchestrator logic) ----------------------------------
+        github_master_list: List[Dict[str, Any]] = []
+        jira_master_list: List[Dict[str, Any]] = []
+
+        # Iterate over the successfully processed objects
+        for single_table_result in table_results:
+            if single_table_result.platform == "github":
+                github_master_list.extend(single_table_result.rows)
+            elif single_table_result.platform == "jira":
+                jira_master_list.extend(single_table_result.rows)
+
+        sql_results = SQLResults(
+            results={"github": github_master_list, "jira": jira_master_list}
         )
-        agg_agent = self._agent("Aggregator_Agent")
-        agg_resp = await agg_agent.arun(agg_query)
-        agg_results: Optional[AggregatedData] = _parse_response(
-            agg_resp, AggregatedData, agg_agent.name
+
+        aggregated_data = AggregatedData(
+            sql_results=sql_results,
+            plan_summary=sql_plan.plan_summary,
+            strategy_notes=sql_plan.strategy_notes,
         )
-        self.session_state["aggregated_data"] = agg_results.model_dump()
+
+        self.session_state["aggregated_data"] = aggregated_data.model_dump()
         log.info("Data aggregation complete.")
 
         yield RunResponse(
-            event="Aggregation_Agent_complete",
-            content="Aggregation done",
+            event="Data_Aggregation_complete",
+            content=f"Data aggregated. {len(github_master_list)} GitHub rows and {len(jira_master_list)} JIRA rows accumulated.",
             run_id=self.run_id,
             session_id=self.session_id,
         )
 
 
 # ------------------------------------------------------------------------------
-# Ad‑hoc test runner (optional)
+# Runner
 # ------------------------------------------------------------------------------
 
 if __name__ == "__main__":
@@ -258,5 +268,19 @@ if __name__ == "__main__":
     async def _main():
         async for chunk in pipeline.arun():
             pprint_run_response(chunk, markdown=False)
+            final_event_reached = chunk.event
+            if "failed" in (chunk.event or "").lower():
+                log.error(
+                    f"Workflow halted due to failed step: {chunk.event}. Content: {chunk.content}"
+                )
+                break
+
+            if final_event_reached == "Data_Aggregation_complete":
+                data = pipeline.session_state.get("aggregated_data")
+                output_path = Path(DATA_DIR / "Data_Aggregation.json")
+
+                with open(output_path, "w") as f:
+                    json.dump(data.model_dump(), f, indent=4)
+                    log.info(f"Saved structured output to {output_path}")
 
     asyncio.run(_main())

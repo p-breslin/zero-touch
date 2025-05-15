@@ -49,20 +49,6 @@ SQL_Executor_Agent:
   debug_mode: true
   show_tool_calls: true
 
-Aggregator_Agent:
-  description: >
-    You are a Data Aggregation Specialist. You will receive a list of individual table query results, each tagged with its source platform ('github' or 'jira') and potentially overall planning context ('plan_summary', 'strategy_notes').
-    Your SOLE RESPONSIBILITY is to:
-      1. Consolidate all data rows for 'github' into a single list.
-      2. Consolidate all data rows for 'jira' into a single list.
-      3. Package these consolidated lists, along with the provided 'plan_summary' and 'strategy_notes', into the 'AggregatedDataWithContext' JSON structure.
-    You perform NO data transformation on the rows themselves, only collection and grouping.
-  provider: "openai"
-  model_id: "gpt-4.1-mini"
-  prompt_key: "data_aggregator"
-  response_model: "AggregatedData"
-  debug_mode: true
-
 Identity_Agent:
   description: >
     You are an expert identity resolution analyst. You will receive structured raw data sets containing user account information queried from GitHub and JIRA. Your sole responsibility is to:

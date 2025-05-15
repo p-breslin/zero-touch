@@ -1,7 +1,7 @@
 from .knowledgebase_models import KBInfo
 from .planner_models import SQLPlan
 from .sql_constructor_models import SQLQuery, SQLQueries
-from .aggregator_models import SingleTableResult, AggregatorInput, AggregatedData
+from .aggregator_models import SingleTableResult, SQLResults, AggregatedData
 from .identity_models import Identity, IdentityList
 
 
@@ -11,7 +11,7 @@ __all__ = [
     "SQLQuery",
     "SQLQueries",
     "SingleTableResult",
-    "AggregatorInput",
+    "SQLResults",
     "AggregatedData",
     "Identity",
     "IdentityList",
