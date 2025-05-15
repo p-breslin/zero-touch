@@ -107,17 +107,17 @@ class Pipeline(Workflow):
         self, agent: Agent, q: SQLQuery, template: str
     ) -> SingleTableResult:
         sql = template.format(
-            sql_query_json=json.dumps({"sql_to_execute": q.sql_string})
+            sql_query_json=json.dumps({"sql_to_execute": q.get("sql_string")})
         )
         resp = await agent.arun(sql)
 
         # _rows_from will normalize the output to List[Dict[str, Any]]
         rows = _rows_from(resp.content)
         log.info(
-            f"Fetched {len(rows)} rows for table '{q.table_name}' (Platform: {q.platform})."
+            f"Fetched {len(rows)} rows for table '{q.get('table_name')}' (Platform: {q.get('platform')})."
         )
         return SingleTableResult(
-            platform=q.platform, table_name=q.table_name, rows=rows
+            platform=q.get("platform"), table_name=q.get("table_name"), rows=rows
         )
 
     # --------------------------------------------------------------------------
@@ -193,7 +193,7 @@ class Pipeline(Workflow):
         executor = self._agent("SQL_Executor_Agent")
         tasks: Sequence[Coroutine[Any, Any, SingleTableResult]] = [
             self._exec_sql(executor, sql_q, executor_template)
-            for sql_q in sql_queries.queries
+            for sql_q in sql_queries.get("queries")
         ]
 
         # All results including those with empty rows but where task didn't fail
@@ -229,8 +229,8 @@ class Pipeline(Workflow):
 
         aggregated_data = AggregatedData(
             sql_results=sql_results,
-            plan_summary=sql_plan.plan_summary,
-            strategy_notes=sql_plan.strategy_notes,
+            plan_summary=sql_plan.get("plan_summary"),
+            strategy_notes=sql_plan.get("strategy_notes"),
         )
 
         self.session_state["aggregated_data"] = aggregated_data.model_dump()
@@ -266,21 +266,28 @@ if __name__ == "__main__":
     )
 
     async def _main():
+        chunks = []
+        final_event_reached = "workflow_started"
         async for chunk in pipeline.arun():
+            chunks.append(chunk)
             pprint_run_response(chunk, markdown=False)
             final_event_reached = chunk.event
+
             if "failed" in (chunk.event or "").lower():
-                log.error(
-                    f"Workflow halted due to failed step: {chunk.event}. Content: {chunk.content}"
-                )
+                log.error(f"Workflow failed after: {final_event_reached}")
                 break
 
-            if final_event_reached == "Data_Aggregation_complete":
+            elif final_event_reached == "Data_Aggregation_complete":
                 data = pipeline.session_state.get("aggregated_data")
                 output_path = Path(DATA_DIR / "Data_Aggregation.json")
 
                 with open(output_path, "w") as f:
-                    json.dump(data.model_dump(), f, indent=4)
+                    json.dump(data, f, indent=4)
                     log.info(f"Saved structured output to {output_path}")
+
+            else:
+                log.warning(
+                    f"Workflow completed but last event was: {final_event_reached}"
+                )
 
     asyncio.run(_main())
