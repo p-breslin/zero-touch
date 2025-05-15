@@ -15,7 +15,7 @@ from models import (
     SQLQueries,
     SQLQuery,
     SingleTableResult,
-    AggregatorInput,
+    SQLResults,
     AggregatedData,
 )
 
@@ -26,7 +26,7 @@ MAPPINGS = {
     "SQLQueries": SQLQueries,
     "SQLQuery": SQLQuery,
     "SingleTableResult": SingleTableResult,
-    "AggregatorInput": AggregatorInput,
+    "SQLResults": SQLResults,
     "AggregatedData": AggregatedData,
 }
 
