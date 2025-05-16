@@ -60,13 +60,13 @@ class IdentityList(BaseModel):
         ...,
         description="A list of unique Identity objects, each representing a resolved person.",
     )
-    unresolved_github_records: Optional[List[Dict[str, Any]]] = Field(
+    unresolved_github_records: Optional[List[str]] = Field(
         default_factory=list,
-        description="Raw GitHub records (dictionaries) that could not be confidently matched to an Identity.",
+        description="Raw GitHub records (JSON encoded strings) that could not be confidently matched to an Identity.",
     )
-    unresolved_jira_records: Optional[List[Dict[str, Any]]] = Field(
+    unresolved_jira_records: Optional[List[str]] = Field(
         default_factory=list,
-        description="Raw JIRA records (dictionaries) that could not be confidently matched to an Identity.",
+        description="Raw JIRA records (JSON encoded strings) that could not be confidently matched to an Identity.",
     )
     resolution_summary: Optional[str] = Field(
         None,
