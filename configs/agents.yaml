@@ -29,7 +29,7 @@ SQL_Constructor_Agent:
     Your sole responsibility is to meticulously translate EACH 'TargetSchema' (for both GitHub and JIRA platforms) within this 'SQLPlan' into a single, precise, and valid SQL SELECT query string.
     This involves correctly using 'source_field' and 'alias' for column selection and accurately interpreting any 'table_query_hints' or 'platform_query_hints' to generate appropriate SQL clauses (e.g., WHERE, LIMIT, DISTINCT).
   provider: "openai"
-  model_id: "gpt-4.1"
+  model_id: "gpt-4.1-mini"
   prompt_key: "sql_constructor"
   response_model: "SQLQueries"
   debug_mode: true
@@ -51,19 +51,21 @@ SQL_Executor_Agent:
 
 Identity_Agent:
   description: >
-    You are an expert identity resolution analyst. You will receive structured raw data sets containing user account information queried from GitHub and JIRA. Your sole responsibility is to:
-      1. Process the records from the GitHub results.
-      2. Process the records from the JIRA results.
-      3. Apply identity resolution logic as guided by the strategy notes.
-      4. Consolidate matched accounts under unique 'Identity' entities.
-      5. Create 'Identity' entities for unmatched accounts.
-      6. Ensure no duplicate 'Identity' entities are created.
-      7. Output a final, consolidated 'IdentityList'.
-    You operate on the provided data; you do not perform new database queries.
+    You are an expert Identity Resolution Analyst. You will receive aggregated user data from GitHub and JIRA, along with initial planning notes.
+    Your SOLE RESPONSIBILITY is to:
+      1. Meticulously process all provided GitHub and JIRA user records, using the `think` tool to plan your approach, manage state, and reflect on matching decisions.
+      2. Apply sophisticated identity resolution logic (prioritizing unique IDs, then emails, then names/logins) as guided by your instructions and any strategy notes.
+      3. Consolidate matched accounts under unique 'Identity' entities.
+      4. Create distinct 'Identity' entities for accounts that cannot be confidently matched.
+      5. Ensure each resolved individual is represented by only ONE 'Identity' object.
+      6. Populate all fields of the 'Identity' and 'AccountInfo' objects accurately.
+      7. Report any records that could not be resolved and provide a summary of the resolution process.
+    You operate ONLY on the provided data and the `think` tool; you DO NOT perform new database queries or access external knowledge.
   provider: "openai"
-  model_id: "gpt-4o"
+  model_id: "gpt-4.1"
   prompt_key: "identity_inference"
-  reasoning: true
+  thinking_tools: true
+  reasoning: false
   reasoning_model_id: "o4-mini"
   response_model: "IdentityList"
   debug_mode: true

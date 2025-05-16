@@ -1,6 +1,5 @@
 from typing import List, Optional
 from pydantic import BaseModel, Field
-# import uuid # If you decide to add a unique_person_id
 
 
 class AccountInfo(BaseModel):
@@ -14,7 +13,6 @@ class AccountInfo(BaseModel):
         default=None,
         description="User email associated with this account on the platform.",
     )
-    # account_id: Optional[str] = Field(default=None, description="Platform-specific account identifier.")
 
 
 class Identity(BaseModel):
@@ -30,9 +28,6 @@ class Identity(BaseModel):
         ...,
         description="A list of source accounts (GitHub, JIRA) that have been resolved to this single person.",
     )
-    # unique_person_id: str = Field(default_factory=lambda: f"person_{uuid.uuid4().hex[:8]}")
-    # confidence_score: Optional[float] = Field(default=None, description="A score indicating the confidence in this identity resolution.")
-
 
 class IdentityList(BaseModel):
     identities: List[Identity] = Field(

@@ -31,7 +31,12 @@ sql_executor_query: >
     ```
 
 identity_query: >
-  Perform identity resolution based on the following data. Data:
+  You are an Identity Resolution Analyst. Based on your detailed instructions (which include using the `think` tool extensively for planning and reflection) and the following 'AggregatedData' JSON object, perform identity resolution to identify unique individuals.
+  Pay close attention to parsing user details from JSON string columns within the 'sql_results'.
+  Prioritize matching strategies as outlined in 'strategy_notes' from the input and your core instructions.
+  Your output MUST be a JSON object strictly conforming to the 'IdentityList' Pydantic model.
+
+  Input AggregatedData:
     ```json
-    {sql_results}
+    {aggregated_data_json}
     ```

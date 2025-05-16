@@ -17,6 +17,7 @@ from models import (
     SingleTableResult,
     SQLResults,
     AggregatedData,
+    IdentityList,
 )
 
 log = logging.getLogger(__name__)
@@ -28,6 +29,7 @@ MAPPINGS = {
     "SingleTableResult": SingleTableResult,
     "SQLResults": SQLResults,
     "AggregatedData": AggregatedData,
+    "IdentityList": IdentityList,
 }
 
 
