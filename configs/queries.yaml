@@ -3,10 +3,22 @@ knowledgebase_query: >
   Task: Using your knowledge base, retrieve all relevant schema details (tables, columns, JSON structures, and their descriptions) for both GitHub and JIRA data sources that are critical for identifying users. Follow your detailed operational workflow and critical items checklist meticulously.
 
 planner_query: >
-  High-level Data Goal: Devise a comprehensive data retrieval strategy to identify unique individuals by collecting all relevant user identification attributes from our GitHub and JIRA data sources.
-  Consider strategies for large tables (distinct user IDs, time-scoping).
-  Based EXCLUSIVELY on the 'Provided Schema Information' and the 'High-level Data Goal', generate the 'SQLPlan' JSON object.
-  Provided Schema Information:
+  # Agent Task: SQL Plan Generation for User Identity Resolution
+
+  ## High-level Data Goal:
+  Devise a comprehensive data retrieval strategy to identify unique individuals by collecting all relevant user identification attributes from our GitHub and JIRA data sources. Pay close attention to strategies for efficiently sampling active users from large activity tables (e.g., using DISTINCT on user identifiers and appropriate LIMIT clauses).
+
+  ## Core Directive:
+  Based EXCLUSIVELY on the 'Provided Schema Information' (JSON block below) and the 'High-level Data Goal', you are to generate the 'SQLPlan' JSON object.
+
+  You MUST use your `think` tool to meticulously follow your detailed operational workflow, including:
+  1. Initial analysis of the goal and provided schema.
+  2. Step-by-step construction of the plan components (TargetSchemas, ColumnSelections, hints) for both GitHub and JIRA.
+  3. Verification of coverage against your 'Critical Tables & Columns to Plan For' list.
+  4. Formulation of 'plan_summary' and 'strategy_notes' (including any schema gaps).
+  Only after this comprehensive `think` process is complete should you output the final 'SQLPlan' JSON.
+
+  ## Provided Schema Information (`KBInfo`):
     ```json
     {knowledgebase_info}
     ```

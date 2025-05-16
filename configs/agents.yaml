@@ -4,7 +4,7 @@ KnowledgeBase_Agent:
   provider: "openai"
   model_id: "gpt-4.1-mini"
   prompt_key: "knowledgebase_info"
-  response_model: "SchemaInfo"
+  response_model: "KBInfo"
   thinking_tools: true
   debug_mode: true
   show_tool_calls: true
@@ -21,6 +21,7 @@ Planner_Agent:
   reasoning: false
   reasoning_model_id: "o4-mini"
   response_model: "SQLPlan"
+  thinking_tools: true
   debug_mode: true
 
 SQL_Constructor_Agent:
