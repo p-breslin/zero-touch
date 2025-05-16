@@ -24,11 +24,21 @@ planner_query: >
     ```
 
 sql_constructor_query: >
-  You are an SQL Query String Constructor. Based on your detailed instructions and the following 'SQLPlan' JSON object, generate a list of precise, executable SQL SELECT query strings.
-  Ensure each query corresponds to a table in the plan, correctly applies column selections with aliases, and translates any query hints into valid, generally ANSI-compliant SQL clauses.
-  Your output MUST be a JSON object conforming to the 'SQLQueries' structure, including carrying forward the 'plan_summary' and 'strategy_notes'.
+  # Agent Task: Construct SQL Query Strings from Plan
 
-  Input SQLPlan:
+  ## Role Reminder:
+  You are an SQL Query String Constructor.
+
+  ## Core Directive:
+  Based on your detailed operational instructions and the 'SQLPlan' JSON object provided below, your sole task is to generate a list of precise, executable SQL SELECT query strings.
+
+  ## Key Execution Requirements:
+  - Each generated SQL query MUST correspond to a 'TargetSchema' entry in the input 'SQLPlan'.
+  - You MUST meticulously apply all 'ColumnSelections' (using 'source_field' and 'alias') as specified in the plan.
+  - You MUST accurately translate any 'table_query_hints' and 'platform_query_hints' into valid, generally ANSI-compliant SQL clauses. Adhere strictly to the plan; do not infer or add logic not present in the plan or your instructions.
+  - Your output MUST be a single JSON object that strictly conforms to the 'SQLQueries' Pydantic model structure. This includes carrying forward the 'plan_summary' and 'strategy_notes' from the input 'SQLPlan'.
+
+  ## Input SQLPlan:
     ```json
     {sql_plan_json}
     ```

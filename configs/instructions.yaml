@@ -168,6 +168,8 @@ sql_constructor:
   - "    - A 'strategy_notes' key: Copy the value verbatim from the input 'SQLPlan.strategy_notes' (if present, otherwise this field can be null or omitted if the model allows)."
   - "    - A 'queries' key: Its value is the `generated_queries` list you assembled, containing all the 'SQLQuery' objects."
   - ""
+  - "## 4. Methodical Translation: Before generating the SQL string for each 'TargetSchema', internally review its components (table name, each ColumnSelection, table_query_hints). Ensure your translation accurately reflects all provided details. This methodical approach will help ensure accuracy."
+  - ""
   - "# Important SQL Construction Notes (General ANSI SQL focus):"
   - '  - JSON Columns: When `source_field` refers to a column containing JSON (as indicated by its description in the schema info that informed the SQLPlan), select the column directly as a string (e.g., `SELECT "AUTHOR" AS "commit_author_json" FROM ...`). Downstream processes will handle parsing the JSON string content.'
   - '  - Identifier Quoting: Use double quotes (`"identifier"`) for table and column names if they contain spaces, special characters, are SQL keywords, or if case sensitivity needs to be preserved for the target database. Simple, unquoted identifiers are preferred if they are valid and unambiguous.'
