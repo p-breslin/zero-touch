@@ -24,6 +24,7 @@ from models import (
     SQLQueries,
     SQLQuery,
     SingleTableResult,
+    SQLExecutionResult,
     SQLResults,
     AggregatedData,
     IdentityList,
@@ -36,24 +37,6 @@ log = logging.getLogger(__name__)
 # ------------------------------------------------------------------------------
 # Helper utilities
 # ------------------------------------------------------------------------------
-
-
-def _rows_from(content: Any) -> List[Dict[str, Any]]:
-    """
-    Normalises the SQL-tool output to a list[dict].
-    Extracts a list of dictionaries (representing database rows) from the content field of an SQL_Executor_Agent's RunResponse.
-    """
-    if content is None:
-        return []
-    if isinstance(content, list):
-        return content if all(isinstance(row, dict) for row in content) else []
-    if isinstance(content, str):
-        try:
-            parsed = json.loads(content)
-            return parsed if isinstance(parsed, list) else []
-        except json.JSONDecodeError:
-            return []
-    return []
 
 
 def _parse_response(response: RunResponse | None, model: Any, agent_name: str):
@@ -85,10 +68,6 @@ class Pipeline(Workflow):
         self.db_engine = create_db_engine()
         log.info("Pipeline ready - session %s", self.session_id)
 
-    # ------------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------------
-
     def _init_kb(self) -> None:
         db_path = Path(DATA_DIR, "ChromaDB")
         embedder = OpenAIEmbedder(
@@ -116,18 +95,22 @@ class Pipeline(Workflow):
     async def _exec_sql(
         self, agent: Agent, q: SQLQuery, template: str
     ) -> SingleTableResult:
-        sql = template.format(
-            sql_query_json=json.dumps({"sql_to_execute": q.sql_string})
-        )
-        resp = await agent.arun(sql)
+        sql_query_json = json.dumps({"sql_to_execute": q.sql_string})
+        query = template.format(sql_query_json=sql_query_json)
+        resp: RunResponse = await agent.arun(query)
 
-        # _rows_from will normalize the output to List[Dict[str, Any]]
-        rows = _rows_from(resp.content)
+        extracted_rows: List[Dict[str, Any]] = []
+        if resp and resp.content:
+            if isinstance(resp.content, SQLExecutionResult):
+                extracted_rows = resp.content.rows
+        else:
+            log.warning(f"Nothing from SQL_Agent for table '{q.table_name}'.")
+
         log.info(
-            f"Fetched {len(rows)} rows for table '{q.table_name}' (Platform: {q.platform})."
+            f"Fetched {len(extracted_rows)} rows for table '{q.table_name}' (Platform: {q.platform})."
         )
         return SingleTableResult(
-            platform=q.platform, table_name=q.table_name, rows=rows
+            platform=q.platform, table_name=q.table_name, rows=extracted_rows
         )
 
     # --------------------------------------------------------------------------
