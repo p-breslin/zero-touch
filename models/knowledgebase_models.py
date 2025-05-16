@@ -1,5 +1,17 @@
 from pydantic import BaseModel, Field
-from typing import List, Dict, Any, Optional, Literal
+from typing import List, Optional, Literal
+
+
+class MetadataItem(BaseModel):
+    type: Literal["table", "column"] = Field(..., description="Type of schema item.")
+    source_system: str = Field(
+        ..., description="Source system, e.g., 'github', 'jira'."
+    )
+    schema_name: str = Field(..., description="Name of the database schema.")
+    table: str = Field(..., description="Name of the table.")
+    column: Optional[str] = Field(
+        None, description="Name of the column, if type is 'column'."
+    )
 
 
 class KBSnippet(BaseModel):
@@ -10,7 +22,7 @@ class KBSnippet(BaseModel):
         ...,
         description="The text content of the schema snippet from the knowledge base.",
     )
-    metadata: Dict[str, Any] = Field(
+    metadata: MetadataItem = Field(
         ..., description="Associated metadata from the knowledge base."
     )
 
