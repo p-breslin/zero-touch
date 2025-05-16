@@ -1,7 +1,6 @@
 knowledgebase_query: >
-  I need to plan SQL queries to extract all user identifying information from GitHub and JIRA.
-  What schema details (tables, columns) should I be aware of from both platforms? 
-  Retrieve this information from the knowledge base.
+  Objective: Gather comprehensive schema information for user identity resolution.
+  Task: Using your knowledge base, retrieve all relevant schema details (tables, columns, JSON structures, and their descriptions) for both GitHub and JIRA data sources that are critical for identifying users. Follow your detailed operational workflow and critical items checklist meticulously.
 
 planner_query: >
   High-level Data Goal: Devise a comprehensive data retrieval strategy to identify unique individuals by collecting all relevant user identification attributes from our GitHub and JIRA data sources.
