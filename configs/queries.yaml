@@ -44,9 +44,18 @@ sql_constructor_query: >
     ```
 
 sql_executor_query: >
-  You are a SQL Query Execution Specialist. Execute the following SQL query using your SQL execution tool and return the raw results.
+  # Agent Task: SQL Query Execution
 
-  SQL Query to Execute:
+  ## Role Reminder:
+  You are a SQL Query Execution Specialist.
+
+  ## Core Directive:
+  Your sole task is to execute the SQL query string provided within the 'sql_to_execute' field of the 'Input JSON' below. You MUST use your 'SQL execution tool' for this.
+
+  ## Output Requirement:
+  Your entire response MUST be a single JSON object that strictly conforms to the 'SQLExecutionResult' Pydantic model. The raw data rows returned by the 'SQL execution tool' must be placed into the 'rows' field of this model.
+
+  ## Input JSON:
     ```json
     {sql_query_json}
     ```
