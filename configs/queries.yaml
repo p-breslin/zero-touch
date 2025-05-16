@@ -61,12 +61,26 @@ sql_executor_query: >
     ```
 
 identity_query: >
-  You are an Identity Resolution Analyst. Based on your detailed instructions (which include using the `think` tool extensively for planning and reflection) and the following 'AggregatedData' JSON object, perform identity resolution to identify unique individuals.
-  Pay close attention to parsing user details from JSON string columns within the 'sql_results'.
-  Prioritize matching strategies as outlined in 'strategy_notes' from the input and your core instructions.
-  Your output MUST be a JSON object strictly conforming to the 'IdentityList' Pydantic model.
+  # Agent Task: Comprehensive Identity Resolution
 
-  Input AggregatedData:
+  ## Role Reminder:
+  You are an expert Identity Resolution Analyst.
+
+  ## Core Directive:
+  Based on your detailed operational instructions (which require extensive use of the `think` tool for all planning, state management, decision-making, and reflection) and the 'AggregatedData' JSON object provided below, your sole task is to perform comprehensive identity resolution to identify unique individuals across GitHub and JIRA data.
+
+  ## Key Operational Focus Areas (as detailed in your instructions):
+  - Meticulous processing of all user records from 'sql_results'.
+  - Careful parsing of direct user attributes and user details nested within JSON string columns.
+  - Proactive scanning of text fields for cross-platform entity references (e.g., JIRA IDs in GitHub content) and using these as part of your matching strategy.
+  - Systematic application of matching strategies (Unique IDs, Exact Emails, Cross-Platform Activity Links, Name/Login Similarity), prioritizing as guided by input 'strategy_notes' and your core instructions.
+  - Accurate construction of 'Identity' and 'AccountInfo' objects.
+  - Thorough handling of unresolved records and generation of a final resolution summary.
+
+  ## Output Requirement:
+  Your entire response MUST be a single JSON object that strictly conforms to the 'IdentityList' Pydantic model structure.
+
+  ## Input AggregatedData:
     ```json
     {aggregated_data_json}
     ```
