@@ -1,5 +1,5 @@
-from typing import List, Optional
 from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any
 
 
 class SQLQuery(BaseModel):
@@ -28,4 +28,11 @@ class SQLQueries(BaseModel):
     queries: List[SQLQuery] = Field(
         ...,
         description="A list of all SQL query strings to be executed, one for each table in the original SQLPlan.",
+    )
+
+
+class SQLExecutionResult(BaseModel):
+    rows: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Raw data rows returned by the SQL query execution.",
     )
