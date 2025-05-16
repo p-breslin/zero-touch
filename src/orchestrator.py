@@ -56,9 +56,18 @@ def _rows_from(content: Any) -> List[Dict[str, Any]]:
 
 
 def _parse_response(response: RunResponse | None, model: Any, agent_name: str):
-    if not response or not response.content:
-        raise ValueError(f"{agent_name} returned no content")
-    return validate_response(response.content, model, savefile=agent_name)
+    try:
+        if not response or not response.content:
+            raise ValueError(f"{agent_name} returned no content")
+        return validate_response(response.content, model, savefile=agent_name)
+    except Exception as e:
+        log.error(
+            "%s validation failed: %s",
+            agent_name,
+            e,
+            extra={"stage": agent_name},
+        )
+        raise
 
 
 # ------------------------------------------------------------------------------
@@ -76,7 +85,7 @@ class Pipeline(Workflow):
         log.info("Pipeline ready - session %s", self.session_id)
 
     # ------------------------------------------------------------------------
-    # Private helpers
+    # Helpers
     # ------------------------------------------------------------------------
 
     def _init_kb(self) -> None:
@@ -134,11 +143,15 @@ class Pipeline(Workflow):
             else None
         )
         if not kb_info:
-            kb_resp = await self._agent("KnowledgeBase_Agent", with_kb=True).arun(
-                queries["knowledgebase_query"]
-            )
-            kb_info = _parse_response(kb_resp, KBInfo, "KnowledgeBase_Agent")
+            kb_agent = self._agent("KnowledgeBase_Agent", with_kb=True)
+            kb_resp = await kb_agent.arun(queries["knowledgebase_query"])
+            try:
+                kb_info = _parse_response(kb_resp, KBInfo, kb_agent.name)
+            except Exception:
+                log.error("Skipping run: KB validation failed")
+                return
             self.session_state["knowledgebase_info"] = kb_info.model_dump()
+
         yield RunResponse(
             event="KnowledgeBase_Agent_complete",
             content="KB ready",
@@ -153,12 +166,19 @@ class Pipeline(Workflow):
             else None
         )
         if not sql_plan:
-            plan_query = queries["planner_query"].format(
+            planner_query = queries["planner_query"].format(
                 knowledgebase_info=kb_info.model_dump_json(indent=2)
             )
-            plan_resp = await self._agent("Planner_Agent").arun(plan_query)
-            sql_plan = _parse_response(plan_resp, SQLPlan, "Planner_Agent")
+
+            plan_agent = self._agent("Planner_Agent")
+            plan_resp = await plan_agent.arun(planner_query)
+            try:
+                sql_plan = _parse_response(plan_resp, SQLPlan, plan_agent.name)
+            except Exception:
+                log.error("Skipping run: Planner validation failed")
+                return
             self.session_state["sql_plan"] = sql_plan.model_dump()
+
         yield RunResponse(
             event="Planner_Agent_complete",
             content="Plan ready",
@@ -173,14 +193,19 @@ class Pipeline(Workflow):
             else None
         )
         if not sql_queries:
-            constructor_q = queries["sql_constructor_query"].format(
+            cons_query = queries["sql_constructor_query"].format(
                 sql_plan_json=sql_plan.model_dump_json(indent=2)
             )
-            cons_resp = await self._agent("SQL_Constructor_Agent").arun(constructor_q)
-            sql_queries = _parse_response(
-                cons_resp, SQLQueries, "SQL_Constructor_Agent"
-            )
+
+            cons_agent = self._agent("SQL_Constructor_Agent")
+            cons_resp = await cons_agent.arun(cons_query)
+            try:
+                sql_queries = _parse_response(cons_resp, SQLQueries, cons_agent.name)
+            except Exception:
+                log.error("Skipping run: SQL Constructor validation failed")
+                return
             self.session_state["sql_queries"] = sql_queries.model_dump()
+
         yield RunResponse(
             event="SQL_Constructor_Agent_complete",
             content="SQL built",
@@ -188,7 +213,7 @@ class Pipeline(Workflow):
             session_id=self.session_id,
         )
 
-        # 4. SQL Execution Agent (parallel) ------------------------------------
+        # 4. SQL Executor Agent (parallel) -------------------------------------
         executor_template = queries["sql_executor_query"]
         executor = self._agent("SQL_Executor_Agent")
         tasks: Sequence[Coroutine[Any, Any, SingleTableResult]] = [
@@ -197,11 +222,20 @@ class Pipeline(Workflow):
         ]
 
         # All results including those with empty rows but where task didn't fail
-        raw_execution_results = await asyncio.gather(*tasks)
+        raw_execution_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Log any failures
+        failures = [e for e in raw_execution_results if isinstance(e, Exception)]
+        if failures:
+            log.error(
+                "SQL_Executor_Agent encountered %d failures (continuing).",
+                len(failures),
+                extra={"stage": "SQL_Executor_Agent", "run_id": self.run_id},
+            )
+
         table_results: List[SingleTableResult] = [
             res for res in raw_execution_results if res is not None
         ]
-
         self.session_state["individual_sql_execution_results"] = [
             t.model_dump() for t in table_results
         ]
