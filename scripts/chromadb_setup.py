@@ -42,16 +42,23 @@ def _build_type_details_description(
     current_type = type_details_obj.get("type")
 
     if current_type == "object":
-        parts.append(
-            f"\n{indent}This field is an object with the following properties:"
-        )
-        for prop in type_details_obj.get("object_properties", []):
-            prop_name = prop.get("name")
-            prop_desc = prop.get("description", "No description available.")
-            nested_desc_str = _build_type_details_description(
-                prop.get("type_details"), indent_level + 1
+        # Only print this if there are actual object_properties to list
+        explicit_obj_props = type_details_obj.get("object_properties", [])
+        if explicit_obj_props:
+            parts.append(
+                f"\n{indent}This field is an object with the following properties:"
             )
-            parts.append(f"{indent}  - {prop_name}: {prop_desc}{nested_desc_str}")
+            for prop in type_details_obj.get("object_properties", []):
+                prop_name = prop.get("name")
+                prop_desc = prop.get("description", "No description available.")
+                nested_desc_str = _build_type_details_description(
+                    prop.get("type_details"), indent_level + 1
+                )
+                parts.append(f"{indent}  - {prop_name}: {prop_desc}{nested_desc_str}")
+
+        # If no explicit props AND no pattern_props, then it's just an 'object'
+        elif not type_details_obj.get("pattern_properties"):
+            parts.append(f"\n{indent}This field is an object.")
 
     elif current_type == "array":
         item_schema = type_details_obj.get("array_item_schema", {})
@@ -100,12 +107,25 @@ def _build_type_details_description(
             defined_description = pp_data.get("description")
 
             if defined_pattern and defined_description:
-                parts.append(f"\n{indent}This field may also contain properties where:")
+                # If current_type wasn't 'object' or didn't have explicit props, introduce it as an object here
+                if (
+                    current_type != "object" and not parts
+                ):  # Or if parts is empty for this level
+                    parts.append(
+                        f"\n{indent}This field is an object where properties can match a pattern:"
+                    )
+                elif (
+                    not explicit_obj_props and current_type == "object"
+                ):  # current_type is object but no explicit_obj_props listed
+                    parts.append(
+                        f"\n{indent}This object field has properties defined by a pattern:"
+                    )
+
                 parts.append(
-                    f"{indent}  - The property name matches the pattern: '{defined_pattern}'"
+                    f"{indent}  - Property names matching pattern: '{defined_pattern}'"
                 )
                 parts.append(
-                    f"{indent}  - The property value is described as: {defined_description}"
+                    f"{indent}  - Their values are described as: {defined_description}"
                 )
 
                 # If values matched by pattern have their own defined structure
@@ -116,7 +136,7 @@ def _build_type_details_description(
                     )
                     if value_structure_desc:
                         parts.append(
-                            f"{indent}  - The property value structure is as follows:{value_structure_desc}"
+                            f"{indent}  - The structure of these patterned property values is:{value_structure_desc}"
                         )
 
             else:
@@ -312,7 +332,9 @@ def list_collections(show_columns: bool = False):
             where={"$and": [{"type": "table"}, {"source_system": source}]},
             include=["metadatas"],
         )
-        table_metas = sorted(results["metadatas"], key=lambda x: x.get("table_name", ""))
+        table_metas = sorted(
+            results["metadatas"], key=lambda x: x.get("table_name", "")
+        )
 
         current_schema_name = None
         for meta in table_metas:
@@ -339,7 +361,8 @@ def list_collections(show_columns: bool = False):
                 )
                 if column_results and column_results.get("metadatas"):
                     column_metas = sorted(
-                        column_results["metadatas"], key=lambda x: x.get("column_name", "")
+                        column_results["metadatas"],
+                        key=lambda x: x.get("column_name", ""),
                     )
                     for col_meta in column_metas:
                         if col_meta and "column_name" in col_meta:
