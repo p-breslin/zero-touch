@@ -5,7 +5,7 @@ import logging
 import chromadb
 import argparse
 from dotenv import load_dotenv
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 import chromadb.utils.embedding_functions as embedding_functions
 
 from src.paths import DATA_DIR
@@ -23,9 +23,112 @@ CHROMA_PATH = str(DATA_DIR / "ChromaDB")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")
 CHROMADB_COLLECTION = os.getenv("CHROMADB_COLLECTION")
 SOURCE_FILES = {
-    "github": "XFLOW_DEV_GITHUB_.json",
-    "jira": "XFLOW_DEV_JIRA_.json",
+    "github": "XFLOW_GITHUB_.json",
+    "jira": "XFLOW_JIRA_.json",
 }
+
+
+def _build_type_details_description(
+    type_details_obj: Optional[Dict], indent_level: int = 0
+) -> str:
+    """
+    Recursively builds a description string from a type_details object.
+    """
+    if not type_details_obj:
+        return ""
+
+    parts = []
+    indent = "  " * indent_level
+    current_type = type_details_obj.get("type")
+
+    if current_type == "object":
+        parts.append(
+            f"\n{indent}This field is an object with the following properties:"
+        )
+        for prop in type_details_obj.get("object_properties", []):
+            prop_name = prop.get("name")
+            prop_desc = prop.get("description", "No description available.")
+            nested_desc_str = _build_type_details_description(
+                prop.get("type_details"), indent_level + 1
+            )
+            parts.append(f"{indent}  - {prop_name}: {prop_desc}{nested_desc_str}")
+
+    elif current_type == "array":
+        item_schema = type_details_obj.get("array_item_schema", {})
+
+        # Default to 'items' if type not specified
+        item_type_desc = item_schema.get("type", "items")
+
+        # Get description attribute of item_schema
+        item_description_attr = item_schema.get("description")
+
+        # Append item description if available
+        if item_description_attr:
+            item_type_desc += f" (which are {item_description_attr})"
+
+        parts.append(f"\n{indent}This field is an array of {item_type_desc}.")
+
+        # If array items are objects, describe their properties
+        if item_schema.get("type") == "object" and "object_properties" in item_schema:
+            parts.append(f"{indent}  Each item object has the following properties:")
+            for item_prop in item_schema.get("object_properties", []):
+                item_prop_name = item_prop.get("name")
+                item_prop_desc = item_prop.get(
+                    "description", "No description available."
+                )
+                nested_item_desc_str = _build_type_details_description(
+                    item_prop.get("type_details"), indent_level + 2
+                )
+                parts.append(
+                    f"{indent}    - {item_prop_name}: {item_prop_desc}{nested_item_desc_str}"
+                )
+
+        # If array items themselves have a complex type_details structure
+        elif item_schema.get("type_details"):
+            parts.append(f"{indent}  Each item (if complex) is structured as follows:")
+            parts.append(
+                _build_type_details_description(
+                    item_schema.get("type_details"), indent_level + 1
+                )
+            )
+
+    # Handle specific 'pattern_properties' structure after basic type processing
+    if "pattern_properties" in type_details_obj:
+        pp_data = type_details_obj.get("pattern_properties")
+        if isinstance(pp_data, dict):
+            defined_pattern = pp_data.get("pattern")  # e.g., ".+"
+            defined_description = pp_data.get("description")
+
+            if defined_pattern and defined_description:
+                parts.append(f"\n{indent}This field may also contain properties where:")
+                parts.append(
+                    f"{indent}  - The property name matches the pattern: '{defined_pattern}'"
+                )
+                parts.append(
+                    f"{indent}  - The property value is described as: {defined_description}"
+                )
+
+                # If values matched by pattern have their own defined structure
+                value_structure_details = pp_data.get("type_details")
+                if value_structure_details:
+                    value_structure_desc = _build_type_details_description(
+                        value_structure_details, indent_level + 1
+                    )
+                    if value_structure_desc:
+                        parts.append(
+                            f"{indent}  - The property value structure is as follows:{value_structure_desc}"
+                        )
+
+            else:
+                log.debug(
+                    f"Encountered 'pattern_properties' of a structure not matching the specific format: {pp_data}"
+                )
+        else:
+            log.warning(
+                f"'pattern_properties' was found but is not a dictionary: {pp_data}"
+            )
+
+    return "".join(parts)
 
 
 def _load_and_chunk_schema(
@@ -42,7 +145,7 @@ def _load_and_chunk_schema(
                 - "Which tables are related to code changes?"
 
         Column Chunk:
-            Provides granular detail about each specific column. Ex queries:
+            Provides granular detail about each specific column, including descriptions of nested structures if the column contains JSON objects or arrays (derived from 'type_details') Example RAG queries:
                 - "What does the SHA column represent in GitHub COMMITS table?"
                 - "Find columns related to user email addresses in JIRA"
 
@@ -54,7 +157,7 @@ def _load_and_chunk_schema(
     documents = []  # Text chunks to be embedded
     metadatas = []  # Corresponding metadata
 
-    path = DATA_DIR / json_filename
+    path = DATA_DIR / f"db_descriptions/{json_filename}"
     log.info(f"Loading data from: {path}")
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -73,12 +176,12 @@ def _load_and_chunk_schema(
 
         # Create chunk for TABLE
         table_id = f"{source}_{schema_name}_{table_name}_table"
-        table_text = f"Source System: {source}, Schema: {schema_name}, Table: {table_name}, Description: {table_desc}"
+        table_text = f"Source System: {source}, Schema: {schema_name}, Table: {table_name}, Table Description: {table_desc}"
         table_meta = {
             "type": "table",
             "source_system": source,
             "schema_name": schema_name,
-            "table": table_name,
+            "table_name": table_name,
         }
 
         ids.append(table_id)
@@ -89,16 +192,27 @@ def _load_and_chunk_schema(
         for column in table.get("columns"):
             col_name = column.get("name")
             col_desc = column.get("description")
+            type_details = column.get("type_details")
+
+            # Construct base column text
+            base_col_text = f"Source System: {source}, Schema Name: {schema_name}, Table: {table_name}, Column: {col_name}, Column Description: {col_desc}"
+
+            # Enhance with type_details if present
+            type_details_text = _build_type_details_description(type_details)
+
+            # Add a period for better sentence flow
+            col_text = base_col_text
+            if type_details_text:
+                col_text += "." + type_details_text
 
             # Construct unique ID
             col_id = f"{source}_{schema_name}_{table_name}_{col_name}_column"
-            col_text = f"Source System: {source}, Schema: {schema_name}, Table: {table_name}, Column: {col_name}, Description: {col_desc}"
             col_meta = {
                 "type": "column",
                 "source_system": source,
                 "schema_name": schema_name,
-                "table": table_name,
-                "column": col_name,
+                "table_name": table_name,
+                "column_name": col_name,
             }
 
             ids.append(col_id)
@@ -147,7 +261,7 @@ def setup_chroma_db():
         )
         log.info(f"Unified collection '{CHROMADB_COLLECTION}' ready.")
     except Exception as e:
-        log.error(f"Failed to create collection '{CHROMADB_COLLECTION}': {e}")
+        log.critical(f"Collection creation failed '{CHROMADB_COLLECTION}': {e}")
         raise
 
     # Process each source file and add to the single collection
@@ -198,12 +312,12 @@ def list_collections(show_columns: bool = False):
             where={"$and": [{"type": "table"}, {"source_system": source}]},
             include=["metadatas"],
         )
-        table_metas = sorted(results["metadatas"], key=lambda x: x.get("table", ""))
+        table_metas = sorted(results["metadatas"], key=lambda x: x.get("table_name", ""))
 
         current_schema_name = None
         for meta in table_metas:
             schema_name = meta["schema_name"]
-            table_name = meta["table"]
+            table_name = meta["table_name"]
 
             if schema_name != current_schema_name:
                 print(f"Schema: {schema_name}")
@@ -218,18 +332,18 @@ def list_collections(show_columns: bool = False):
                             {"type": "column"},
                             {"source_system": source},
                             {"schema_name": schema_name},
-                            {"table": table_name},
+                            {"table_name": table_name},
                         ]
                     },
                     include=["metadatas"],
                 )
                 if column_results and column_results.get("metadatas"):
                     column_metas = sorted(
-                        column_results["metadatas"], key=lambda x: x.get("column", "")
+                        column_results["metadatas"], key=lambda x: x.get("column_name", "")
                     )
                     for col_meta in column_metas:
-                        if col_meta and "column" in col_meta:
-                            print(f"      - {col_meta['column']}")
+                        if col_meta and "column_name" in col_meta:
+                            print(f"      - {col_meta['column_name']}")
                 else:
                     print(f"No columns found for table '{table_name}'.")
 
