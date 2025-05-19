@@ -4,7 +4,7 @@ import duckdb
 import logging
 from pathlib import Path
 from dotenv import load_dotenv
-from src.paths import DATA_DIR
+from scripts.paths import DATA_DIR
 from utils.logging_setup import setup_logging
 
 load_dotenv()

@@ -2,7 +2,7 @@ import os
 import yaml
 import json
 import logging
-from src.paths import DATA_DIR, CONFIG_DIR
+from scripts.paths import DATA_DIR, CONFIG_DIR
 
 from agno.models.google import Gemini
 from agno.models.openai import OpenAIChat

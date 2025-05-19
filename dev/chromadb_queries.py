@@ -1,7 +1,7 @@
 import os
 import logging
 import chromadb
-from src.paths import DATA_DIR
+from scripts.paths import DATA_DIR
 from dotenv import load_dotenv
 from utils.logging_setup import setup_logging
 import chromadb.utils.embedding_functions as embedding_functions

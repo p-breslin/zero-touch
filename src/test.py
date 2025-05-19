@@ -13,7 +13,7 @@ from agno.knowledge.agent import AgentKnowledge
 from agno.embedder.openai import OpenAIEmbedder
 from agno.vectordb.chroma.chromadb import ChromaDb
 
-from src.paths import DATA_DIR
+from scripts.paths import DATA_DIR
 from agents.agent_builder import build_agent
 from utils.logging_setup import setup_logging
 from services.create_engine import create_db_engine

@@ -2,7 +2,7 @@ import os
 import duckdb
 from dotenv import load_dotenv
 from pathlib import Path
-from src.paths import DATA_DIR
+from scripts.paths import DATA_DIR
 
 load_dotenv()
 db_filename = f"{os.getenv('DUCKDB_SUBSET_NAME')}.duckdb"

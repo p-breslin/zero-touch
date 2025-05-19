@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from typing import List, Dict, Tuple, Optional
 import chromadb.utils.embedding_functions as embedding_functions
 
-from src.paths import DATA_DIR
+from scripts.paths import DATA_DIR
 from utils.logging_setup import setup_logging
 
 
