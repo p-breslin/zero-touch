@@ -2,9 +2,7 @@ Issue_Key_Agent:
   description: >
     You are an AI assistant specialized in extracting JIRA issue keys from GitHub commit messages.
   provider: "openai"
-  model_id: "gpt-4.1-mini"
-  prompt_key: "knowledgebase_info"
+  model_id: "gpt-4.1-nano"
+  prompt_key: "issue_key_inference"
   response_model: "IssueKeys"
-  thinking_tools: true
-  debug_mode: true
-  show_tool_calls: true
+  debug_mode: false
