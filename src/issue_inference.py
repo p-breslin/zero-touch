@@ -13,18 +13,11 @@ load_dotenv()
 setup_logging()
 log = logging.getLogger(__name__)
 
-# Initialize set-up
+# Initialize database connection
 try:
     db_path = DATA_DIR / f"{os.getenv('DUCKDB_SUBSET_NAME')}.duckdb"
     conn = duckdb.connect(database=str(db_path), read_only=False)
     log.info("Connected to DuckDB database.")
-    try:
-        agent = build_agent(agent_key="Issue_Key_Agent")
-        log.info("Agent built successfully.")
-
-    except Exception as e:
-        log.error(f"Failed to build Agent: {e}")
-        exit()
 except Exception as e:
     log.error(f"Failed to connect to DuckDB at {db_path}: {e}")
     exit()
@@ -76,25 +69,35 @@ def update_extracted_keys(conn, updates: list):
 
 async def run_agent(commit_sha: str, commit_message: str):
     """
-    Asynchronously runs the Agent for a single commit message. Returns a tuple: (commit_sha, extracted_key_string_or_empty)
+    Asynchronously runs an instance of the Agent for a single commit message. Returns a tuple: commit_sha, extracted_key (or empty string or None)
     """
     log.info(f"Processing SHA: {commit_sha}.")
-    try:
-        resp: RunResponse = await agent.arun(message=commit_message)
 
-        extracted_key = None
+    agent_instance = None
+    try:
+        agent_instance = build_agent(agent_key="Issue_Key_Agent")
+        if agent_instance is None:
+            log.error(f"Failed to build agent for SHA {commit_sha}")
+            return commit_sha, None
+
+        resp: RunResponse = await agent_instance.arun(message=commit_message)
+
+        extracted_key = ""  # Default to empty string (processed, no key found)
         if resp and resp.content:
-            if isinstance(resp.content, str) and resp.content.strip():
-                extracted_key = resp.content.strip()
+            result = resp.content.key
+
+            # Check it's not None and not just whitespace
+            if result is not None and result.strip():
+                extracted_key = result.strip()
                 log.info(f"Extracted key: {extracted_key}. SHA: {commit_sha}")
             else:
-                log.info(f"Agent found no key or empty content for SHA: {commit_sha}")
-                extracted_key = ""
+                log.info(
+                    f"Agent's response_model had empty/None value for SHA: {commit_sha}. Marking as no key found."
+                )
         else:
             log.warning(
                 f"Agent returned no content for SHA: {commit_sha}. Marking as no key found."
             )
-            extracted_key = ""
         return commit_sha, extracted_key
 
     except Exception as e:
