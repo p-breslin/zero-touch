@@ -22,9 +22,10 @@ CHROMA_PATH = str(DATA_DIR / "ChromaDB")
 # Setup
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")
 CHROMADB_COLLECTION = os.getenv("CHROMADB_COLLECTION")
+COMPANY_NAME = os.getenv("COMPANY_NAME")
 SOURCE_FILES = {
-    "github": "XFLOW_GITHUB_.json",
-    "jira": "XFLOW_JIRA_.json",
+    "github": f"{COMPANY_NAME}_GITHUB_.json",
+    "jira": f"{COMPANY_NAME}_JIRA_.json",
 }
 
 
