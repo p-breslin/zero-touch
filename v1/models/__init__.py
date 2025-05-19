@@ -3,6 +3,7 @@ from .planner_models import SQLPlan
 from .sql_models import SQLQuery, SQLQueries, SQLExecutionResult
 from .aggregator_models import SingleTableResult, SQLResults, AggregatedData
 from .identity_models import Identity, IdentityList
+from .inference_models import IssueKeys
 
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "AggregatedData",
     "Identity",
     "IdentityList",
+    "IssueKeys",
 ]
