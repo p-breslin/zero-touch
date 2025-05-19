@@ -10,7 +10,7 @@ setup_logging()
 log = logging.getLogger(__name__)
 
 
-def create_db_engine(db_type: str = "duckdb") -> Engine:
+def create_db_engine(db_type: str = "duckdb", file=None) -> Engine:
     """Creates a sqlalchemy engine for Agno Agents to access via SQL calls."""
 
     if db_type.lower() == "snowflake":
@@ -39,7 +39,7 @@ def create_db_engine(db_type: str = "duckdb") -> Engine:
             raise
 
     elif db_type.lower() == "duckdb":
-        db_name = os.getenv("SNOWFLAKE_DATABASE")
+        db_name = file if file else os.getenv("DUCKDB_NAME")
         abs_path = os.path.dirname(os.path.abspath(__file__))
         db_path = os.path.join(abs_path, f"../data/{db_name}.duckdb")
         duckdb_url = f"duckdb:///{db_path}"
