@@ -9,30 +9,10 @@ from agno.tools.sql import SQLTools
 from agno.tools.thinking import ThinkingTools
 from agno.knowledge.agent import AgentKnowledge
 
-from models import (
-    KBInfo,
-    SQLPlan,
-    SQLQueries,
-    SQLQuery,
-    SQLExecutionResult,
-    SingleTableResult,
-    SQLResults,
-    AggregatedData,
-    IdentityList,
-)
+from models import IssueKeys
 
 log = logging.getLogger(__name__)
-MAPPINGS = {
-    "KBInfo": KBInfo,
-    "SQLPlan": SQLPlan,
-    "SQLQueries": SQLQueries,
-    "SQLQuery": SQLQuery,
-    "SQLExecutionResult": SQLExecutionResult,
-    "SingleTableResult": SingleTableResult,
-    "SQLResults": SQLResults,
-    "AggregatedData": AggregatedData,
-    "IdentityList": IdentityList,
-}
+MAPPINGS = {"IssueKeys": IssueKeys}
 
 
 def build_agent(
@@ -70,7 +50,7 @@ def build_agent(
     show_tool_calls = cfg.get("show_tool_calls", False)
     add_datetime_to_instructions = cfg.get("add_datetime_to_instructions", False)
 
-    log.info(f"Building Agent: {agent_key}")
+    log.debug(f"Building Agent: {agent_key}")
 
     # Resolve models
     response_model = MAPPINGS.get(response_model, None)

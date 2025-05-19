@@ -13,20 +13,16 @@ def build_base_agent(
     name: str,
     model: Any,
     tools: List[Any],
-
     # Prompting components
     description: Optional[str] = None,
     instructions: Optional[List[str]] = None,
-
     # Output structure & initial state
     response_model: Optional[Type[BaseModel]] = None,
     session_state: Optional[Dict[str, Any]] = None,
-
     # Advanced capabilities
     knowledge: Optional[AgentKnowledge] = None,
     reasoning: bool = False,
-    reasoning_model: Optional[Any] = None, 
-
+    reasoning_model: Optional[Any] = None,
     # Configuration flags for Agno Agent behavior
     markdown: bool = False,
     debug_mode: bool = False,
@@ -43,7 +39,7 @@ def build_base_agent(
 
         description: String describing the agent's overall role or persona.
         instructions: List of specific instructions for the agent to follow.
-        
+
         response_model: Optional Pydantic model to structure and validate the agent's output.
         session_state: Optional dict for the agent's initial session state.
 
@@ -59,7 +55,7 @@ def build_base_agent(
     Returns:
         A configured Agno Agent instance.
     """
-    log.info(f"Building agent '{name}'...")
+    log.debug(f"Building agent '{name}'...")
 
     # Directly pass parameters to the Agno Agent constructor
     agent_instance = Agent(
@@ -79,5 +75,5 @@ def build_base_agent(
         add_datetime_to_instructions=add_datetime_to_instructions,
     )
 
-    log.info(f"Agent '{name}' built successfully.")
+    log.debug(f"Agent '{name}' built successfully.")
     return agent_instance
