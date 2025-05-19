@@ -7,7 +7,8 @@ setup_logging()
 log = logging.getLogger(__name__)
 
 # Paths
-export_root = "data/snowflake_exports/sf_data"
+# export_root = "data/snowflake_exports/sf_data"
+export_root = "data/snowflake_exports/dev"
 db_path = "data/MELTANO_DATABASE.duckdb"
 
 # Connect to DuckDB (creates file if it doesn't exist)
