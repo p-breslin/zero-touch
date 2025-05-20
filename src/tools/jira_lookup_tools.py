@@ -23,9 +23,6 @@ class JiraLookupTools(Toolkit):
     def __init__(self, conn: duckdb.DuckDBPyConnection):
         super().__init__(name="jira_lookup_tools")
         self.conn = conn
-        # Register tools so the Agent can discover them
-        self.register(self.search_jira_users_by_email)
-        self.register(self.search_jira_users_by_name)
 
     # exact e-mail match
     @tool(
