@@ -44,10 +44,7 @@ DDL = f"""
 CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
     jira_account_id       TEXT PRIMARY KEY,
     jira_display_name     TEXT,
-    jira_email_address    TEXT,
-    jira_account_type     TEXT,
-    is_active             BOOLEAN,
-    jira_timezone         TEXT
+    jira_email_address    TEXT
 );
 """
 
@@ -60,19 +57,16 @@ def _ensure_table(conn: duckdb.DuckDBPyConnection) -> None:
 # data fetch
 SELECT_USERS = f"""
 SELECT
-    "ACCOUNTID"   AS account_id,
-    "DISPLAYNAME" AS display_name,
-    "EMAILADDRESS"AS email_address,
-    "ACCOUNTTYPE" AS account_type,
-    "ACTIVE"      AS is_active,
-    "TIMEZONE"    AS timezone
-FROM "{MAIN_JIRA_SCHEMA}"."USERS"
+    "ID"   AS account_id,
+    "NAME" AS display_name,
+    "EMAIL"AS email_address
+FROM "{MAIN_JIRA_SCHEMA}"."USERS_SUMMARY"
 WHERE "ACCOUNTID" IS NOT NULL;
 """
 
 
 def _fetch_users(conn: duckdb.DuckDBPyConnection) -> List[Tuple[Any, ...]]:
-    log.info("Querying %s.USERS", MAIN_JIRA_SCHEMA)
+    log.info("Querying %s.USERS_SUMMARY", MAIN_JIRA_SCHEMA)
     return conn.execute(SELECT_USERS).fetchall()
 
 
@@ -84,10 +78,10 @@ def _build_records() -> List[Dict[str, Any]]:
 
     profiles: Dict[str, Dict[str, Any]] = {}
 
-    for acc_id, disp, email, acc_type, active, tz in rows:
+    for acc_id, disp, email in rows:
         key = _coerce(acc_id)
         if not key:
-            log.debug("Skipping row without ACCOUNTID: %s", (acc_id, disp, email))
+            log.debug("Skipping row without ID: %s", (acc_id, disp, email))
             continue
 
         # First-come wins; change to overwrite logic?
@@ -97,9 +91,6 @@ def _build_records() -> List[Dict[str, Any]]:
                 jira_account_id=key,
                 jira_display_name=_coerce(disp),
                 jira_email_address=_coerce(email, lower=True),
-                jira_account_type=_coerce(acc_type),
-                is_active=bool(active) if active is not None else None,
-                jira_timezone=_coerce(tz),
             ),
         )
 
@@ -112,17 +103,11 @@ UPSERT_SQL = f"""
 INSERT INTO "{TABLE_NAME}" (
     jira_account_id,
     jira_display_name,
-    jira_email_address,
-    jira_account_type,
-    is_active,
-    jira_timezone
-) VALUES (?, ?, ?, ?, ?, ?)
+    jira_email_address
+) VALUES (?, ?, ?)
 ON CONFLICT (jira_account_id) DO UPDATE SET
     jira_display_name  = excluded.jira_display_name,
-    jira_email_address = excluded.jira_email_address,
-    jira_account_type  = excluded.jira_account_type,
-    is_active          = excluded.is_active,
-    jira_timezone      = excluded.jira_timezone;
+    jira_email_address = excluded.jira_email_address
 """
 
 
@@ -135,14 +120,7 @@ def _insert(records: List[Dict[str, Any]]) -> None:
         _ensure_table(conn)
 
         rows = [
-            (
-                r["jira_account_id"],
-                r["jira_display_name"],
-                r["jira_email_address"],
-                r["jira_account_type"],
-                r["is_active"],
-                r["jira_timezone"],
-            )
+            (r["jira_account_id"], r["jira_display_name"], r["jira_email_address"])
             for r in records
         ]
         conn.executemany(UPSERT_SQL, rows)
@@ -156,6 +134,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    log.info("Staging JIRA user profiles → %s", TABLE_NAME)
+    log.info("Staging JIRA user profiles -> %s", TABLE_NAME)
     main()
     log.info("Done.")
