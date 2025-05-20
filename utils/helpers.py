@@ -8,9 +8,6 @@ from agno.models.google import Gemini
 from agno.models.openai import OpenAIChat
 from agno.models.openrouter import OpenRouter
 
-from utils.logging_setup import setup_logging
-
-setup_logging()
 log = logging.getLogger(__name__)
 
 
