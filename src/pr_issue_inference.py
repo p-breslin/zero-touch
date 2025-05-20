@@ -1,11 +1,12 @@
 """
 Extracts JIRA issue keys from GitHub Pull Request titles and bodies.
 
-    1. Fetches PRs from the GITHUB_PRS table in the staging DB
-       where EXTRACTED_JIRA_KEY is NULL.
-    2. Concatenates PR TITLE and BODY to form input text for the Agent.
-    3. Invokes an Agent to extract the first JIRA key.
-    4. Updates the EXTRACTED_JIRA_KEY column in the GITHUB_PRS table for the processed PR.
+Steps
+-----
+1. Fetches PRs from the GITHUB_PRS table in the staging DB where EXTRACTED_JIRA_KEY is NULL.
+2. Concatenates PR TITLE and BODY to form input text for the Agent.
+3. Invokes an Agent to extract the first JIRA key.
+4. Updates the EXTRACTED_JIRA_KEY column in the GITHUB_PRS table for the PR.
 """
 
 from __future__ import annotations
@@ -33,7 +34,7 @@ DB_PATH = Path(DATA_DIR, f"{os.environ['DUCKDB_STAGING_NAME']}.duckdb")
 T_PRS = "GITHUB_PRS"
 LIMIT = int(os.getenv("PR_KEY_PROCESS_LIMIT", 1000))
 CONCUR = int(os.getenv("PR_KEY_CONCURRENCY_LIMIT", 100))
-AGENT_KEY = "PR_Issue_Key_Inference"
+AGENT_KEY = "Issue_Key_Inference"
 
 
 # SQL helpers ------------------------------------------------------------------
