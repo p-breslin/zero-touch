@@ -7,9 +7,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 from typing import List, Tuple
 from agno.agent import RunResponse
-from contextlib import contextmanager
 
 from scripts.paths import DATA_DIR
+from utils.helpers import db_manager
 from agents.agent_builder import build_agent
 from utils.logging_setup import setup_logging
 
@@ -23,16 +23,6 @@ DB_SUBSET = Path(DATA_DIR, f"{os.environ['DUCKDB_SUBSET_NAME']}.duckdb")
 
 PROCESS_LIMIT = int(os.getenv("PROCESS_LIMIT", 1000))
 CONCURRENCY_LIMIT = int(os.getenv("CONCURRENCY_LIMIT", 100))
-
-
-# DB helpers
-@contextmanager
-def _db(path: Path, *, read_only: bool = False):
-    conn = duckdb.connect(str(path), read_only=read_only)
-    try:
-        yield conn
-    finally:
-        conn.close()
 
 
 def _fetch_commits(
@@ -91,7 +81,7 @@ async def _extract_key(sha: str, message: str) -> Tuple[str, str | None]:
 # Orchestration
 async def _process_commits() -> None:
     # open DB once for the whole run
-    with _db(DB_SUBSET) as conn:
+    with db_manager(DB_SUBSET) as conn:
         commits = _fetch_commits(conn, PROCESS_LIMIT)
 
         if not commits:
