@@ -55,7 +55,7 @@ def _coerce(val: Any) -> str | None:
     return None if val is None else str(val)
 
 
-# # DuckDB management
+# DuckDB management
 DDL_ISSUES = f"""
 CREATE TABLE IF NOT EXISTS {TABLE_ISSUES} (
     issue_key              TEXT PRIMARY KEY,

@@ -42,9 +42,9 @@ def _coerce(val: Any, *, lower: bool = False) -> str | None:
 # schema (data definition language i.e DDL)
 DDL = f"""
 CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
-    account_id       TEXT PRIMARY KEY,
-    display_name     TEXT,
-    email    TEXT
+    jira_account_id       TEXT PRIMARY KEY,
+    jira_display_name     TEXT,
+    jira_email_address    TEXT
 );
 """
 
@@ -57,9 +57,9 @@ def _ensure_table(conn: duckdb.DuckDBPyConnection) -> None:
 # data fetch
 SELECT_USERS = f"""
 SELECT
-    "ID"   AS account_id,
-    "NAME" AS display_name,
-    "EMAIL"AS email
+    "ID"   AS jira_account_id,
+    "NAME" AS jira_display_name,
+    "EMAIL"AS jira_email_address
 FROM "{MAIN_JIRA_SCHEMA}"."USERS_SUMMARY"
 WHERE "ID" IS NOT NULL;
 """
@@ -88,9 +88,9 @@ def _build_records() -> List[Dict[str, Any]]:
         profiles.setdefault(
             key,
             dict(
-                account_id=key,
-                display_name=_coerce(disp),
-                email=_coerce(email, lower=True),
+                jira_account_id=key,
+                jira_display_name=_coerce(disp),
+                jira_email_address=_coerce(email, lower=True),
             ),
         )
 
@@ -101,13 +101,13 @@ def _build_records() -> List[Dict[str, Any]]:
 # insert / upsert
 UPSERT_SQL = f"""
 INSERT INTO "{TABLE_NAME}" (
-    account_id,
-    display_name,
-    email
+    jira_account_id,
+    jira_display_name,
+    jira_email_address
 ) VALUES (?, ?, ?)
-ON CONFLICT (account_id) DO UPDATE SET
-    display_name  = excluded.display_name,
-    email = excluded.email
+ON CONFLICT (jira_account_id) DO UPDATE SET
+    jira_display_name  = excluded.jira_display_name,
+    jira_email_address = excluded.jira_email_address
 """
 
 
@@ -119,7 +119,10 @@ def _insert(records: List[Dict[str, Any]]) -> None:
     with _db(WRITE_DB) as conn:
         _ensure_table(conn)
 
-        rows = [(r["account_id"], r["display_name"], r["email"]) for r in records]
+        rows = [
+            (r["jira_account_id"], r["jira_display_name"], r["jira_email_address"])
+            for r in records
+        ]
         conn.executemany(UPSERT_SQL, rows)
         conn.commit()
         log.info("Upserted %d profiles into %s", len(rows), TABLE_NAME)
