@@ -33,7 +33,7 @@ DB_PATH = Path(DATA_DIR, f"{os.environ['DUCKDB_SUBSET_NAME']}.duckdb")
 T_PRS = "GITHUB_PRS"
 LIMIT = int(os.getenv("PR_KEY_PROCESS_LIMIT", 1000))
 CONCUR = int(os.getenv("PR_KEY_CONCURRENCY_LIMIT", 50))
-AGENT_KEY = "Issue_Key_Agent"
+AGENT_KEY = "PR_Issue_Key_Agent"
 
 
 # SQL helpers ------------------------------------------------------------------
@@ -68,25 +68,26 @@ def _update_keys(conn, rows: List[Tuple[str, str]]):
 # Agent logic ------------------------------------------------------------------
 async def _extract(
     agent, pr_id: str, title: str | None, body: str | None
-) -> Tuple[str, str]:
+) -> Tuple[str, str | None]:
     """
     Builds an Agent insatnce and gives it a concatenated PR title and body. Processeses the agent's response and returns a tuple containing the original pr_id and the extracted JIRA key string (or an empty string if no key is found or an error occurs).
     """
     txt = "\n\n".join(p for p in (title, body) if p).strip()
     if not txt:
-        return pr_id, ""  # treat as processed, no key
+        return pr_id, None  # no key found
 
     try:
         agent = build_agent(AGENT_KEY)
         resp: RunResponse = await agent.arun(message=txt)
-        key_obj: IssueKey | None = (
-            resp.content if isinstance(resp.content, IssueKey) else None
-        )
-        key = (key_obj.key or "").strip() if key_obj else ""
-        return pr_id, key
+        if resp and isinstance(resp.content, IssueKey):
+            key = resp.content.key
+            return pr_id, key.strip() if key and key.strip() else None
+
+        log.info("PR %s produced no key", pr_id)
+        return pr_id, None
     except Exception as exc:
-        log.error("Agent error for PR %s: %s", pr_id, exc, exc_info=True)
-        return pr_id, ""  # leave blank on error
+        log.error("Agent error on PR %s: %s", pr_id, exc, exc_info=True)
+        return pr_id, None
 
 
 # Main async -------------------------------------------------------------------
@@ -102,10 +103,10 @@ async def _run():
 
         sem = asyncio.Semaphore(CONCUR)
 
-        async def worker(rec):
-            pid, t, b = rec
+        async def worker(row):
+            pid, titile, body = row  # unpack (INTERNAL_ID, TITLE, BODY)
             async with sem:
-                return await _extract(pid, t, b)
+                return await _extract(pid, titile, body)
 
         updates = await asyncio.gather(*[worker(r) for r in prs])
         _update_keys(conn, updates)

@@ -3,7 +3,7 @@ from typing import Optional, List, Literal
 
 
 class IssueKey(BaseModel):
-    key: str
+    key: Optional[str] = None
 
 
 class MatchedJiraProfile(BaseModel):

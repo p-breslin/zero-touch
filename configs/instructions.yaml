@@ -12,14 +12,16 @@ PR_Issue_Key_Inference: >
     - Keys are case-sensitive for the project key part (e.g., 'proj-123' is typically not a valid JIRA key, expect uppercase project keys like 'PROJ-123').
   - If you find one or more valid JIRA issue keys, identify **ONLY THE FIRST ONE** that appears in the text. Search from the beginning of the text to its end.
   - Place this single, first-found JIRA key as a string in the 'key' field of the output structure.
-  - If no valid JIRA issue key is found anywhere in the text, the 'key' field in the output structure should be an empty string.
+  - If no valid JIRA issue key is found anywhere in the text, the 'key' field in the output structure should be `null` (or omitted, resulting in `null` if the field is optional).
   - Do not add any other explanatory text, greetings, apologies, or reasoning in your response.
   - Focus solely on accurately populating the 'key' field of the defined output structure with either the first valid JIRA key found or an empty string.
 
   # Output Structure Reminder
   The expected output must conform to a structure containing a single field named 'key'. This field will hold either:
   1. A string representing the first valid JIRA issue key found (e.g., "PROJ-1234").
-  2. An empty string ("") if no valid JIRA issue key is found.
+  2. `null` if no valid JIRA issue key is found (or the 'key' field can be omitted from the JSON output).
+
+# ------------------------------------------------------------------------------
 
 identity_inference: >
   # Role and Objective

@@ -4,9 +4,11 @@ PR_Issue_Key_Inference:
     typically sourced from GitHub Pull Request titles and bodies, or commit messages. Your primary goal is to identify the first valid JIRA issue key present.
   provider: "openai"
   model_id: "gpt-4.1-nano"
-  prompt_key: "issue_key_inference"
+  prompt_key: "PR_Issue_Key_Inference"
   response_model: "IssueKeys"
   debug_mode: false
+
+# ------------------------------------------------------------------------------
 
 Identity_Agent:
   description: >
