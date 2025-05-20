@@ -1,13 +1,20 @@
 from __future__ import annotations
 import os
-import duckdb
 import logging
 from pathlib import Path
 from dotenv import load_dotenv
 from scripts.paths import DATA_DIR
-from contextlib import contextmanager
+from utils.helpers import db_manager
 from typing import Any, Dict, List, Tuple
 from utils.logging_setup import setup_logging
+
+"""
+This script gathers and consolidates various GitHub user identity signals. Its purpose is to create a comprehensive, deduplicated collection of all observed GitHub identity touchpoints for later resolution against JIRA profiles.
+
+    1. Extracts raw signals (GitHub user ID, login, Git name, Git email) from the GITHUB_COMMITS and GITHUB_PRS tables in the staging DuckDB. 
+    2. Enriches these signals using profile information from the USERS_SUMMARY table in the main DB. 
+    3. Creates unique "fingerprints" for each combination of signals and upserts these consolidated identity signals, along with their sources, into a GITHUB_IDENTITY_SIGNALS table in the staging DB. 
+"""
 
 # configuration
 load_dotenv()
@@ -26,15 +33,6 @@ DB_SUBSET = Path(DATA_DIR, f"{os.environ['DUCKDB_SUBSET_NAME']}.duckdb")
 
 
 # helpers
-@contextmanager
-def _db(path: Path, *, read_only: bool = False):
-    conn = duckdb.connect(str(path), read_only=read_only)
-    try:
-        yield conn
-    finally:
-        conn.close()
-
-
 def _t(v: Any) -> str | None:  # text-coerce
     return None if v is None else str(v)
 
@@ -209,7 +207,7 @@ def _consolidate(
     return list(bucket.values())
 
 
-# ── upsert  ──────────────────────────────────────────────────────────────────
+# upsert
 UPSERT = f"""
 INSERT INTO "{TABLE_SIGNALS}" (
     signal_fingerprint,
@@ -259,7 +257,10 @@ def _upsert(conn_sub, rows: List[Dict[str, Any]]) -> None:
 
 # entry point
 def main() -> None:
-    with _db(DB_MAIN, read_only=True) as main_conn, _db(DB_SUBSET) as sub_conn:
+    with (
+        db_manager(DB_MAIN, read_only=True) as main_conn,
+        db_manager(DB_SUBSET) as sub_conn,
+    ):
         by_id, by_login = _user_maps(main_conn)
         signals = _commit_signals(sub_conn) + _pr_signals(sub_conn)
         consolidated = _consolidate(signals, by_id, by_login)

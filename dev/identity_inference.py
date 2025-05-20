@@ -8,14 +8,22 @@ from pathlib import Path
 from dotenv import load_dotenv
 from pydantic import TypeAdapter
 from typing import Any, Dict, List
-from contextlib import contextmanager
 from agno.agent import Agent, RunResponse
 
 from scripts.paths import DATA_DIR
 from models import IdentityInference
-from agents.agent_builder import build_agent
+from utils.helpers import db_manager
 from utils.logging_setup import setup_logging
-from tools.jira_lookup_tools import build_jira_lookup_tools
+from src.agents.agent_builder import build_agent
+from src.tools.jira_lookup_tools import build_jira_lookup_tools
+
+"""
+This script orchestrates the core identity resolution logic. Its purpose is to create concrete links between observed GitHub identities and known JIRA users.
+
+    1. Fetches unprocessed identity signals from the GITHUB_IDENTITY_SIGNALS table in the staging DB. 
+    2. For each signal, it asynchronously runs an Agent which attempts to match the GitHub signals (emails, names, logins) to JIRA user profiles. 
+    3. The agent's structured output is then processed and the inferred links are inserted into the RESOLVED_IDENTITY_LINKS table in the staging DB. 
+"""
 
 
 # configuration
@@ -37,15 +45,6 @@ CONCURRENT = int(os.getenv("IDENTITY_MATCH_CONCURRENCY_LIMIT", 100))
 
 
 # helpers
-@contextmanager
-def _db(path: Path, *, read_only: bool = False):
-    c = duckdb.connect(str(path), read_only=read_only)
-    try:
-        yield c
-    finally:
-        c.close()
-
-
 def _ensure_table(conn: duckdb.DuckDBPyConnection) -> None:
     conn.execute(
         f"""
@@ -228,7 +227,7 @@ def _insert_links(
 
 # main async pipeline
 async def _pipeline() -> None:
-    with _db(DB_SUBSET) as conn:
+    with db_manager(DB_SUBSET) as conn:
         _ensure_table(conn)
         signals = _pending_signals(conn, LIMIT)
         if not signals:

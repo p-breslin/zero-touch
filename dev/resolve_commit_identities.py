@@ -6,16 +6,24 @@ import asyncio
 import logging
 from pathlib import Path
 from dotenv import load_dotenv
-from contextlib import contextmanager
 from agno.agent import Agent, RunResponse
 from typing import Any, Dict, List, Tuple
 from pydantic import TypeAdapter, ValidationError
 
 from scripts.paths import DATA_DIR
 from models import IdentityInference
-from agents.agent_builder import build_agent
+from utils.helpers import db_manager
 from utils.logging_setup import setup_logging
-from tools.jira_lookup_tools import build_jira_lookup_tools
+from src.agents.agent_builder import build_agent
+from src.tools.jira_lookup_tools import build_jira_lookup_tools
+
+"""
+This script focuses on resolving the identities of actors (authors and committers) involved in GitHub commits. Its purpose is to specifically link individuals performing code changes (commits) to their JIRA identities.
+
+    1. Fetches distinct commit actor details from the GITHUB_COMMITS table in the staging DB.
+    2. Enriches these with GitHub profile information from the main USERS_SUMMARY table, and then asynchronously calls an Agent for each unique actor signal. 
+    3. The agent attempts to match this signal to JIRA user profiles. The resulting inferred links (including match type, confidence, reasoning, and any agent notes) are then upserted into a RESOLVED_PERSON_LINKS table in the staging DB. 
+"""
 
 
 # configuration
@@ -40,15 +48,6 @@ _ID_ADAPTER = TypeAdapter(IdentityInference)
 
 
 # helpers
-@contextmanager
-def _db(path: Path, *, read_only=False):
-    conn = duckdb.connect(str(path), read_only=read_only)
-    try:
-        yield conn
-    finally:
-        conn.close()
-
-
 def _ensure_resolved_table(conn):
     conn.execute(
         f"""
@@ -266,7 +265,7 @@ def main() -> None:
     log.info(
         "Commit-actor identity resolution: limit=%d, concurrency=%d", LIMIT, CONCURRENT
     )
-    with _db(DB_SUB) as sub, _db(DB_MAIN, read_only=True) as main:
+    with db_manager(DB_SUB) as sub, db_manager(DB_MAIN, read_only=True) as main:
         asyncio.run(_pipeline(sub, main))
     log.info("Done.")
 

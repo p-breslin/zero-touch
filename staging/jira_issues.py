@@ -1,14 +1,21 @@
 from __future__ import annotations
 import os
-import json
 import duckdb
 import logging
 from pathlib import Path
 from dotenv import load_dotenv
 from typing import Any, Dict, List
 from scripts.paths import DATA_DIR
-from contextlib import contextmanager
 from utils.logging_setup import setup_logging
+from utils.helpers import safe_json, db_manager
+
+"""
+This script stages JIRA issue details relevant to commit activity. Its purpose is to create a readily queryable table of JIRA issues that are directly linked to code commits.
+
+    1. Identifies unique JIRA issue keys that have been previously extracted into the GITHUB_COMMITS table in the staging database. 
+    2. Fetches detailed issue information (for each key) from the main JIRA ISSUES table and cross-references these account IDs with the JIRA_USER_PROFILES table in the staging DB.
+    3. This enriched information is then upserted into a JIRA_ISSUES table in the staging database.
+"""
 
 
 # configuration
@@ -26,33 +33,6 @@ MAIN_JIRA_SCHEMA = f"{COMPANY_NAME}_JIRA_"
 
 READ_DB_MAIN = Path(DATA_DIR, f"{os.environ['DUCKDB_NAME']}.duckdb")
 WRITE_DB_SUB = Path(DATA_DIR, f"{os.environ['DUCKDB_SUBSET_NAME']}.duckdb")
-
-
-# helpers
-@contextmanager
-def _db(path: Path, *, read_only: bool = False):
-    conn = duckdb.connect(str(path), read_only=read_only)
-    try:
-        yield conn
-    finally:
-        conn.close()
-
-
-def _safe_json(blob: Any) -> Dict[str, Any]:
-    if not blob:
-        return {}
-    if isinstance(blob, dict):
-        return blob
-    if isinstance(blob, str):
-        try:
-            return json.loads(blob)
-        except json.JSONDecodeError:
-            log.debug("Bad JSON blob ignored: %s", blob)
-    return {}
-
-
-def _coerce(val: Any) -> str | None:
-    return None if val is None else str(val)
 
 
 # DuckDB management
@@ -113,7 +93,7 @@ def _fetch_issue(
         log.debug("No issue with key %s", key)
         return None
 
-    fields = _safe_json(row[0])
+    fields = safe_json(row[0])
     internal_id = int(row[1]) if row[1] is not None else None
     assignee = fields.get("assignee", {})
     reporter = fields.get("reporter", {})
@@ -188,7 +168,10 @@ def _upsert_issues(
 def _build_issue_records(keys: List[str]) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
 
-    with _db(READ_DB_MAIN, read_only=True) as conn_main, _db(WRITE_DB_SUB) as conn_sub:
+    with (
+        db_manager(READ_DB_MAIN, read_only=True) as conn_main,
+        db_manager(WRITE_DB_SUB) as conn_sub,
+    ):
         _ensure_issues_table(conn_sub)
 
         for idx, key in enumerate(keys, 1):
@@ -203,7 +186,7 @@ def _build_issue_records(keys: List[str]) -> List[Dict[str, Any]]:
 
 # entry point
 def main() -> None:
-    with _db(WRITE_DB_SUB, read_only=True) as conn_sub:
+    with db_manager(WRITE_DB_SUB, read_only=True) as conn_sub:
         keys = _get_jira_keys(conn_sub)
 
     if not keys:

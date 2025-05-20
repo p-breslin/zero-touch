@@ -5,9 +5,17 @@ import logging
 from pathlib import Path
 from dotenv import load_dotenv
 from scripts.paths import DATA_DIR
-from contextlib import contextmanager
+from utils.helpers import db_manager
 from typing import Any, Dict, List, Tuple
 from utils.logging_setup import setup_logging
+
+"""
+This script creates a standardized directory of JIRA user profiles in the staging database. The purpose is to provide a clean and accessible list of JIRA users for identity resolution and linking JIRA activities to individuals.
+
+    1. Fetches user data from the USERS_SUMMARY table in the JIRA data source. 
+    2. Processes these records (ensures uniqueness).
+    3. Upserts the records into a JIRA_USER_PROFILES table in the staging db. 
+"""
 
 # configuration
 load_dotenv()
@@ -23,15 +31,6 @@ WRITE_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_SUBSET_NAME']}.duckdb")
 
 
 # helpers
-@contextmanager
-def _db(path: Path, *, read_only: bool = False):
-    conn = duckdb.connect(str(path), read_only=read_only)
-    try:
-        yield conn
-    finally:
-        conn.close()
-
-
 def _coerce(val: Any, *, lower: bool = False) -> str | None:
     if val is None:
         return None
@@ -72,7 +71,7 @@ def _fetch_users(conn: duckdb.DuckDBPyConnection) -> List[Tuple[Any, ...]]:
 
 # record builder
 def _build_records() -> List[Dict[str, Any]]:
-    with _db(READ_DB, read_only=True) as conn:
+    with db_manager(READ_DB, read_only=True) as conn:
         rows = _fetch_users(conn)
         log.info("Fetched %d JIRA users", len(rows))
 
@@ -116,7 +115,7 @@ def _insert(records: List[Dict[str, Any]]) -> None:
         log.info("Nothing to insert.")
         return
 
-    with _db(WRITE_DB) as conn:
+    with db_manager(WRITE_DB) as conn:
         _ensure_table(conn)
 
         rows = [

@@ -1,7 +1,11 @@
 import os
 import yaml
 import json
+import duckdb
 import logging
+from pathlib import Path
+from typing import Any, Dict
+from contextlib import contextmanager
 from scripts.paths import DATA_DIR, CONFIG_DIR
 
 from agno.models.google import Gemini
@@ -100,3 +104,26 @@ def parse_json(json_string: str):
         return json.loads(text)
     except (json.JSONDecodeError, TypeError):
         return None
+
+
+def safe_json(blob: Any) -> Dict[str, Any]:
+    """Return a dict; never None."""
+    if not blob:
+        return {}
+    if isinstance(blob, dict):
+        return blob
+    if isinstance(blob, (str, bytes, bytearray)):
+        try:
+            return json.loads(blob)
+        except json.JSONDecodeError:
+            log.debug("Bad JSON blob ignored: %s", blob)
+    return {}
+
+
+@contextmanager
+def db_manager(path: Path, *, read_only: bool = False):
+    conn = duckdb.connect(path, read_only=read_only)
+    try:
+        yield conn
+    finally:
+        conn.close()

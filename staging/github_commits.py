@@ -1,15 +1,21 @@
 from __future__ import annotations
-
 import os
-import json
 import duckdb
 import logging
 from pathlib import Path
 from dotenv import load_dotenv
 from scripts.paths import DATA_DIR
-from contextlib import contextmanager
 from typing import Any, Dict, List, Tuple
 from utils.logging_setup import setup_logging
+from utils.helpers import safe_json, db_manager
+
+"""
+This script populates the GITHUB_COMMITS table in a staging of the database. The purpose is to prepare it for JIRA issue key extraction.
+
+    1. Processes GitHub commit data from the source database. 
+    2. Fetches commit details from the COMMITS table. 
+    3. Transforms these record into a flatter structure and inserts them into a new table named GITHUB_COMMITS in a new database.
+"""
 
 # configuration
 load_dotenv()
@@ -21,30 +27,6 @@ COMPANY_NAME = os.environ["COMPANY_NAME"]
 
 READ_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_NAME']}.duckdb")
 WRITE_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_SUBSET_NAME']}.duckdb")
-
-
-# helpers
-def _safe_json(blob: Any) -> Dict[str, Any]:
-    """Return a dict; never None."""
-    if not blob:
-        return {}
-    if isinstance(blob, dict):
-        return blob
-    if isinstance(blob, (str, bytes, bytearray)):
-        try:
-            return json.loads(blob)
-        except json.JSONDecodeError:
-            log.debug("Bad JSON blob ignored: %s", blob)
-    return {}
-
-
-@contextmanager
-def _db(path: Path, *, read_only: bool = False):
-    conn = duckdb.connect(path, read_only=read_only)
-    try:
-        yield conn
-    finally:
-        conn.close()
 
 
 # DuckDB management
@@ -93,14 +75,14 @@ def _fetch_commits(
 def _build_records(limit: int = 1000) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
 
-    with _db(READ_DB, read_only=True) as conn:
+    with db_manager(READ_DB, read_only=True) as conn:
         rows = _fetch_commits(conn, limit)
         log.info("Fetched %d commits", len(rows))
 
         for sha, commit_blob, author_blob, committer_blob, ts in rows:
-            commit_info = _safe_json(commit_blob)
-            author_json = _safe_json(author_blob)
-            committer_json = _safe_json(committer_blob)
+            commit_info = safe_json(commit_blob)
+            author_json = safe_json(author_blob)
+            committer_json = safe_json(committer_blob)
 
             # Author/committer details stored twice in GitHub’s payload:
             author_meta = commit_info.get("author", {})
@@ -130,7 +112,7 @@ def _insert(records: List[Dict[str, Any]]) -> None:
         log.info("No records to insert.")
         return
 
-    with _db(WRITE_DB) as conn:
+    with db_manager(WRITE_DB) as conn:
         _ensure_table(conn)
 
         rows = [

@@ -2,19 +2,27 @@ import os
 import json
 import logging
 from pathlib import Path
-from contextlib import contextmanager
 from typing import Any, Dict, List, Tuple
 
 import duckdb
 from dotenv import load_dotenv
 from scripts.paths import DATA_DIR
+from utils.helpers import db_manager
 from utils.logging_setup import setup_logging
 
+"""
+This script extracts information about user involvement in GitHub Pull Requests. The purpose is to create a focused table linking users to PRs and their specific roles.
+
+    1. Fetches recent PR data from the PULL_REQUESTS table and actual reviewer data from the REVIEWS table in the main GitHub data source. 
+    2. Identifies distinct user roles for each PR, along with user IDs and logins. 
+    3. Inserts this structured data into a GITHUB_PRS table in the staging database. 
+"""
+
+# configuration
 load_dotenv()
 setup_logging()
 log = logging.getLogger(__name__)
 
-# configuration
 TABLE_NAME = "GITHUB_PRS"
 COMPANY_NAME = os.environ["COMPANY_NAME"]
 
@@ -55,15 +63,6 @@ def _add_record(
             "role_in_pr": role,
         }
     )
-
-
-@contextmanager
-def _db(path: Path, *, read_only: bool = False):
-    conn = duckdb.connect(path, read_only=read_only)
-    try:
-        yield conn
-    finally:
-        conn.close()
 
 
 # DuckDB management
@@ -138,7 +137,7 @@ def _fetch_reviewers(
 
 # core logic
 def _build_records(limit: int = 1000) -> List[Dict[str, Any]]:
-    with _db(READ_DB, read_only=True) as conn:
+    with db_manager(READ_DB, read_only=True) as conn:
         prs = _fetch_recent_prs(conn, limit)
         log.info("Fetched %d pull requests", len(prs))
 
@@ -221,7 +220,7 @@ def _build_records(limit: int = 1000) -> List[Dict[str, Any]]:
 
 
 def _insert_records(records: List[Dict[str, Any]]) -> None:
-    with _db(WRITE_DB) as conn:
+    with db_manager(WRITE_DB) as conn:
         _ensure_table(conn)
         rows = [
             (
