@@ -40,7 +40,6 @@ DDL_COMMITS = f"""
 CREATE TABLE IF NOT EXISTS {T_COMMITS} (
     COMMIT_SHA          TEXT PRIMARY KEY,
     COMMIT_TIMESTAMP    TIMESTAMP,
-    EXTRACTED_ISSUE_KEY TEXT,
     AUTHOR_ID           TEXT,
     AUTHOR_NAME         TEXT,
     AUTHOR_EMAIL        TEXT,
@@ -49,7 +48,8 @@ CREATE TABLE IF NOT EXISTS {T_COMMITS} (
     COMMITTER_NAME      TEXT,
     COMMITTER_EMAIL     TEXT,
     COMMITTER_LOGIN     TEXT,
-    COMMIT_MESSAGE      TEXT
+    COMMIT_MESSAGE      TEXT,
+    EXTRACTED_JIRA_KEY  TEXT
 );
 """
 
@@ -136,7 +136,6 @@ def _build_records() -> List[Dict[str, Any]]:
             dict(
                 COMMIT_SHA=sha,
                 COMMIT_TIMESTAMP=ts,
-                EXTRACTED_ISSUE_KEY=None,
                 AUTHOR_ID=str(author_j.get("id")) if author_j.get("id") else None,
                 AUTHOR_NAME=author_m.get("name"),
                 AUTHOR_EMAIL=author_m.get("email"),
@@ -146,6 +145,7 @@ def _build_records() -> List[Dict[str, Any]]:
                 COMMITTER_EMAIL=comm_m.get("email"),
                 COMMITTER_LOGIN=comm_j.get("login"),
                 COMMIT_MESSAGE=commit.get("message"),
+                EXTRACTED_JIRA_KEY=None,
             )
         )
     log.info("Built %d commit records from %d SHAs.", len(records), len(rows))
@@ -172,7 +172,6 @@ def _insert(records: List[Dict[str, Any]]):
                 (
                     r["COMMIT_SHA"],
                     r["COMMIT_TIMESTAMP"],
-                    r["EXTRACTED_ISSUE_KEY"],
                     r["AUTHOR_ID"],
                     r["AUTHOR_NAME"],
                     r["AUTHOR_EMAIL"],
@@ -182,6 +181,7 @@ def _insert(records: List[Dict[str, Any]]):
                     r["COMMITTER_EMAIL"],
                     r["COMMITTER_LOGIN"],
                     r["COMMIT_MESSAGE"],
+                    r["EXTRACTED_JIRA_KEY"],
                 )
                 for r in records
             ],
