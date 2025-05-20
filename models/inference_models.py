@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Literal
 
 
-class IssueKeys(BaseModel):
+class IssueKey(BaseModel):
     key: str
 
 
