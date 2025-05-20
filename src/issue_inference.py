@@ -1,163 +1,136 @@
+from __future__ import annotations
 import os
 import duckdb
-import logging
 import asyncio
+import logging
+from pathlib import Path
 from dotenv import load_dotenv
+from typing import List, Tuple
 from agno.agent import RunResponse
+from contextlib import contextmanager
 
 from scripts.paths import DATA_DIR
 from agents.agent_builder import build_agent
 from utils.logging_setup import setup_logging
 
+# configuration
 load_dotenv()
 setup_logging()
 log = logging.getLogger(__name__)
 
-# Initialize database connection
-try:
-    db_path = DATA_DIR / f"{os.getenv('DUCKDB_SUBSET_NAME')}.duckdb"
-    conn = duckdb.connect(database=str(db_path), read_only=False)
-    log.info("Connected to DuckDB database.")
-except Exception as e:
-    log.error(f"Failed to connect to DuckDB at {db_path}: {e}")
-    exit()
+TABLE_COMMITS = "GITHUB_COMMITS"
+DB_SUBSET = Path(DATA_DIR, f"{os.environ['DUCKDB_SUBSET_NAME']}.duckdb")
+
+PROCESS_LIMIT = int(os.getenv("PROCESS_LIMIT", 1000))
+CONCURRENCY_LIMIT = int(os.getenv("CONCURRENCY_LIMIT", 100))
 
 
-def fetch_commits(conn, limit=None):
-    """
-    Fetches commit_sha and commit_message from the data table where extracted_issue_key is NULL.
-    """
-    query = """
-    SELECT commit_sha, commit_message 
-    FROM "GITHUB_COMMITS"
-    WHERE extracted_issue_key IS NULL
-    """
-    if limit:
-        query += f" LIMIT {limit}"
-
+# DB helpers
+@contextmanager
+def _db(path: Path, *, read_only: bool = False):
+    conn = duckdb.connect(str(path), read_only=read_only)
     try:
-        results = conn.execute(query).fetchall()
-        log.info(f"Fetched {len(results)} commits to process for JIRA key extraction.")
-        return results
-    except Exception as e:
-        log.error(f"Error fetching commits to process: {e}")
-        return []
-
-
-def update_extracted_keys(conn, updates: list):
-    """
-    Updates the extracted_issue_key for a batch of commits.
-    """
-    log.info(f"Preparing to update {len(updates)} records in the database.")
-    try:
-        conn.begin()  # Start transaction
-        for commit_sha, extracted_key in updates:
-            conn.execute(
-                """
-                UPDATE "GITHUB_COMMITS"
-                SET extracted_issue_key = ?
-                WHERE commit_sha = ?;
-                """,
-                (extracted_key, commit_sha),
-            )
-        conn.commit()  # Commit all updates for the batch
-        log.info(f"Batch database update of {len(updates)} records successful.")
-    except Exception as e:
-        log.error(f"Error during batch database update: {e}")
-        conn.rollback()
-
-
-async def run_agent(commit_sha: str, commit_message: str):
-    """
-    Asynchronously runs an instance of the Agent for a single commit message. Returns a tuple: commit_sha, extracted_key (or empty string or None)
-    """
-    log.info(f"Processing SHA: {commit_sha}.")
-
-    agent_instance = None
-    try:
-        agent_instance = build_agent(agent_key="Issue_Key_Agent")
-        if agent_instance is None:
-            log.error(f"Failed to build agent for SHA {commit_sha}")
-            return commit_sha, None
-
-        resp: RunResponse = await agent_instance.arun(message=commit_message)
-
-        extracted_key = ""  # Default to empty string (processed, no key found)
-        if resp and resp.content:
-            result = resp.content.key
-
-            # Check it's not None and not just whitespace
-            if result is not None and result.strip():
-                extracted_key = result.strip()
-                log.info(f"Extracted key: {extracted_key}. SHA: {commit_sha}")
-            else:
-                log.info(
-                    f"Agent's response_model had empty/None value for SHA: {commit_sha}. Marking as no key found."
-                )
-        else:
-            log.warning(
-                f"Agent returned no content for SHA: {commit_sha}. Marking as no key found."
-            )
-        return commit_sha, extracted_key
-
-    except Exception as e:
-        log.error(f"Error running agent for SHA {commit_sha}: {e}", exc_info=True)
-        return commit_sha, None  # Return None for key to indicate an error
-
-
-async def process_commits(process_limit=100, concurrency_limit=10):
-    """
-    Fetches unprocessed commits, runs the Agents in parallel, and collects results for batch database update.
-    """
-    try:
-        commits_data = fetch_commits(conn, limit=process_limit)
-
-        if not commits_data:
-            log.info("No commits found requiring JIRA key extraction.")
-            return
-
-        tasks = []
-        for commit_sha, commit_message in commits_data:
-            tasks.append(run_agent(commit_sha, commit_message))
-
-        results = []
-
-        # Process tasks in chunks to respect concurrency_limit
-        for i in range(0, len(tasks), concurrency_limit):
-            batch_tasks = tasks[i : i + concurrency_limit]
-            log.info(
-                f"Running a batch of {len(batch_tasks)} agent tasks concurrently..."
-            )
-            batch_results = await asyncio.gather(*batch_tasks)
-            results.extend(batch_results)
-            log.info(f"Completed batch {i // concurrency_limit + 1}.")
-
-            # Filter out None results from tasks that failed before DB update:
-            # If key is None from run_agent: an error occurred
-            # If key is '': the agent processed it and found nothing
-            updates = [(sha, key) for sha, key in results if key is not None]
-
-            if updates:
-                update_extracted_keys(conn, updates)
-            else:
-                log.info("No agent results to update for this run.")
-
+        yield conn
     finally:
         conn.close()
 
 
-if __name__ == "__main__":
-    try:
-        COMMITS_TO_PROCESS = os.getenv("PROCESS_LIMIT", 1000)
-        CONCURRENT_AGENTS = os.getenv("CONCURRENCY_LIMIT", 100)
+def _fetch_commits(
+    conn: duckdb.DuckDBPyConnection, limit: int
+) -> List[Tuple[str, str]]:
+    rows = conn.execute(
+        f"""
+        SELECT commit_sha, commit_message
+        FROM "{TABLE_COMMITS}"
+        WHERE extracted_issue_key IS NULL
+        LIMIT {limit};
+        """
+    ).fetchall()
+    log.info("Fetched %d commits needing extraction", len(rows))
+    return rows
 
-        asyncio.run(
-            process_commits(
-                process_limit=int(COMMITS_TO_PROCESS),
-                concurrency_limit=int(CONCURRENT_AGENTS),
-            )
+
+def _batch_update(
+    conn: duckdb.DuckDBPyConnection, updates: List[Tuple[str, str]]
+) -> None:
+    if not updates:
+        return
+
+    conn.executemany(
+        f"""
+        UPDATE "{TABLE_COMMITS}"
+        SET extracted_issue_key = ?
+        WHERE commit_sha = ?;
+        """,
+        updates,  # (key, sha)
+    )
+    conn.commit()
+    log.info("Wrote %d extracted keys to DB", len(updates))
+
+
+# Agent runner
+async def _extract_key(sha: str, message: str) -> Tuple[str, str | None]:
+    agent = build_agent("Issue_Key_Agent")
+    if not agent:
+        log.error("Agent build failed for SHA %s", sha)
+        return sha, None
+
+    try:
+        resp: RunResponse = await agent.arun(message=message)
+        key: str | None = (
+            getattr(resp.content, "key", None) if resp and resp.content else None
         )
-    except Exception as e:
-        log.error(f"An error occurred in the main execution block: {e}", exc_info=True)
-    finally:
-        log.info("JIRA key extraction script finished.")
+        key = key.strip() if key else ""  # ''->processed/no-match, None->error
+        log.debug("SHA %s -> key '%s'", sha, key)
+        return sha, key
+    except Exception as exc:
+        log.error("Agent raised for SHA %s: %s", sha, exc, exc_info=True)
+        return sha, None
+
+
+# Orchestration
+async def _process_commits() -> None:
+    # open DB once for the whole run
+    with _db(DB_SUBSET) as conn:
+        commits = _fetch_commits(conn, PROCESS_LIMIT)
+
+        if not commits:
+            log.info("Nothing to do.")
+            return
+
+        semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
+        results: List[Tuple[str, str | None]] = []
+
+        async def _wrap(sha: str, msg: str):
+            async with semaphore:
+                return await _extract_key(sha, msg)
+
+        tasks = [_wrap(sha, msg) for sha, msg in commits]
+
+        for coro in asyncio.as_completed(tasks):
+            sha, key = await coro
+            if key is not None:  # skip rows where agent errored
+                results.append((key, sha))  # INSERT order = (key, sha)
+
+            # flush in batches of CONCURRENCY_LIMIT to keep mem low
+            if len(results) >= CONCURRENCY_LIMIT:
+                _batch_update(conn, results)
+                results.clear()
+
+        # final flush
+        _batch_update(conn, results)
+
+
+# entry point
+def main() -> None:
+    log.info(
+        "Extracting JIRA keys (limit=%d, concurrency=%d)",
+        PROCESS_LIMIT,
+        CONCURRENCY_LIMIT,
+    )
+    asyncio.run(_process_commits())
+    log.info("Finished.")
+
+
+if __name__ == "__main__":
+    main()
