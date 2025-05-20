@@ -31,9 +31,9 @@ log = logging.getLogger(__name__)
 
 DB_PATH = Path(DATA_DIR, f"{os.environ['DUCKDB_SUBSET_NAME']}.duckdb")
 T_PRS = "GITHUB_PRS"
-LIMIT = int(os.getenv("PR_KEY_PROCESS_LIMIT", 1000))
-CONCUR = int(os.getenv("PR_KEY_CONCURRENCY_LIMIT", 50))
-AGENT_KEY = "PR_Issue_Key_Agent"
+LIMIT = int(os.getenv("PR_KEY_PROCESS_LIMIT", 5))
+CONCUR = int(os.getenv("PR_KEY_CONCURRENCY_LIMIT", 10))
+AGENT_KEY = "PR_Issue_Key_Inference"
 
 
 # SQL helpers ------------------------------------------------------------------
@@ -66,8 +66,8 @@ def _update_keys(conn, rows: List[Tuple[str, str]]):
 
 
 # Agent logic ------------------------------------------------------------------
-async def _extract(
-    agent, pr_id: str, title: str | None, body: str | None
+async def _extract_key(
+    pr_id: str, title: str | None, body: str | None
 ) -> Tuple[str, str | None]:
     """
     Builds an Agent insatnce and gives it a concatenated PR title and body. Processeses the agent's response and returns a tuple containing the original pr_id and the extracted JIRA key string (or an empty string if no key is found or an error occurs).
@@ -90,6 +90,18 @@ async def _extract(
         return pr_id, None
 
 
+# Concurrency helper -----------------------------------------------------------
+async def _bounded_extract(
+    row: Tuple[str, str | None, str | None], sem: asyncio.Semaphore
+) -> Tuple[str, str | None]:
+    """
+    Helper function to respect the concurrency semaphore.
+    """
+    pr_id, title, body = row  # unpack (INTERNAL_ID, TITLE, BODY)
+    async with sem:
+        return await _extract_key(pr_id, title, body)
+
+
 # Main async -------------------------------------------------------------------
 async def _run():
     """
@@ -102,13 +114,8 @@ async def _run():
             return
 
         sem = asyncio.Semaphore(CONCUR)
-
-        async def worker(row):
-            pid, titile, body = row  # unpack (INTERNAL_ID, TITLE, BODY)
-            async with sem:
-                return await _extract(pid, titile, body)
-
-        updates = await asyncio.gather(*[worker(r) for r in prs])
+        tasks = [_bounded_extract(row, sem) for row in prs]
+        updates = await asyncio.gather(*tasks)
         _update_keys(conn, updates)
 
 

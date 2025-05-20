@@ -5,7 +5,7 @@ PR_Issue_Key_Inference:
   provider: "openai"
   model_id: "gpt-4.1-nano"
   prompt_key: "PR_Issue_Key_Inference"
-  response_model: "IssueKeys"
+  response_model: "IssueKey"
   debug_mode: false
 
 # ------------------------------------------------------------------------------

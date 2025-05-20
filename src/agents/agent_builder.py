@@ -9,10 +9,10 @@ from agno.tools.sql import SQLTools
 from agno.tools.thinking import ThinkingTools
 from agno.knowledge.agent import AgentKnowledge
 
-from models import IssueKeys
+from models import IssueKey
 
 log = logging.getLogger(__name__)
-MAPPINGS = {"IssueKeys": IssueKeys}
+MAPPINGS = {"IssueKey": IssueKey}
 
 
 def build_agent(
