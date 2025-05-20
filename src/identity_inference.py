@@ -6,6 +6,7 @@ import asyncio
 import logging
 from pathlib import Path
 from dotenv import load_dotenv
+from pydantic import TypeAdapter
 from typing import Any, Dict, List
 from contextlib import contextmanager
 from agno.agent import Agent, RunResponse
@@ -22,14 +23,17 @@ load_dotenv()
 setup_logging()
 log = logging.getLogger(__name__)
 
+# Pre-build an adapter once; reuse for every call
+_ID_ADAPTER = TypeAdapter(IdentityInference)
+
 DB_SUBSET = Path(DATA_DIR, f"{os.environ['DUCKDB_SUBSET_NAME']}.duckdb")
 
 SRC_SIGNALS = "GITHUB_IDENTITY_SIGNALS"
 SRC_JIRA_USERS = "JIRA_USER_PROFILES"
-TGT_RESOLVED = "RESOLVED_PERSON_LINKS"
+TGT_RESOLVED = "RESOLVED_IDENTITY_LINKS"
 
-LIMIT = int(os.getenv("PERSON_MATCH_PROCESS_LIMIT", 500))
-CONCURRENT = int(os.getenv("PERSON_MATCH_CONCURRENCY_LIMIT", 10))
+LIMIT = int(os.getenv("IDENTITY_MATCH_PROCESS_LIMIT", 2000))
+CONCURRENT = int(os.getenv("IDENTITY_MATCH_CONCURRENCY_LIMIT", 100))
 
 
 # helpers
@@ -86,40 +90,10 @@ def _pending_signals(
     return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
-# JIRA helper tools (email / name search)
-def _search_by_email(
-    conn: duckdb.DuckDBPyConnection, email: str
-) -> List[Dict[str, Any]]:
-    if not email:
-        return []
-    cur = conn.execute(
-        f"""SELECT jira_account_id, jira_display_name, jira_email_address
-            FROM {SRC_JIRA_USERS}
-            WHERE jira_email_address = ?;""",
-        (email.lower(),),
-    )
-    cols = [c[0] for c in cur.description]
-    return [dict(zip(cols, r)) for r in cur.fetchall()]
-
-
-def _search_by_name(
-    conn: duckdb.DuckDBPyConnection, q: str, limit: int = 5
-) -> List[Dict[str, Any]]:
-    if not q:
-        return []
-    cur = conn.execute(
-        f"""SELECT jira_account_id, jira_display_name, jira_email_address
-            FROM {SRC_JIRA_USERS}
-            WHERE jira_display_name ILIKE ?
-            LIMIT ?;""",
-        (f"%{q}%", limit),
-    )
-    cols = [c[0] for c in cur.description]
-    return [dict(zip(cols, r)) for r in cur.fetchall()]
-
-
 # agent runner
 async def _run_agent(agent: Agent, signal: Dict[str, Any]) -> IdentityInference:
+    """Return a valid IdentityInference; never None."""
+    orig_fp = signal["signal_fingerprint"]
     payload = json.dumps(
         {
             "github_user_id": signal["github_user_id"],
@@ -130,25 +104,54 @@ async def _run_agent(agent: Agent, signal: Dict[str, Any]) -> IdentityInference:
             "github_profile_email": signal["github_profile_email"],
         }
     )
+    stub = IdentityInference(
+        signal_fingerprint=orig_fp,
+        github_user_id=signal["github_user_id"],
+        github_login=signal["github_login"],
+        git_name=signal["git_name"],
+        git_email=signal["git_email"],
+        github_profile_name=signal["github_profile_name"],
+        github_profile_email=signal["github_profile_email"],
+        matched_jira_profiles=[],
+        notes="",
+    )
     try:
         resp: RunResponse = await agent.arun(message=payload)
-        if resp and isinstance(resp.content, IdentityInference):
-            return resp.content
-        raise TypeError("Unexpected agent response")
+        content = resp.content if resp else None
+
+        # 1) Already correct type
+        if isinstance(content, IdentityInference):
+            content.signal_fingerprint = orig_fp
+            return content
+
+        # 2) JSON string or dict we can coerce
+        if isinstance(content, str):
+            try:
+                content = json.loads(content)  # attempt to parse JSON
+            except json.JSONDecodeError:
+                # Treat as "no match" rather than hard error
+                stub.notes = "Agent returned an unparsable string"
+                log.info(
+                    "Unparsable string for %s - stub inserted: %.120s …",
+                    orig_fp,
+                    content.replace("\n", " ") if content else "",
+                )
+                return stub  # graceful exit
+
+        if isinstance(content, dict):
+            out = _ID_ADAPTER.validate_python(content)
+            out.signal_fingerprint = orig_fp
+            return out
+
+        # graceful “no match”
+        stub.notes = "Agent returned no match"
+        log.info("No match for %s (agent returned None/unusable)", orig_fp)
+        return stub
+
     except Exception as exc:
-        log.error(
-            "Agent failed for %s: %s", signal["signal_fingerprint"], exc, exc_info=True
-        )
-        return IdentityInference(
-            github_user_id=signal["github_user_id"],
-            github_login=signal["github_login"],
-            git_name=signal["git_name"],
-            git_email=signal["git_email"],
-            github_profile_name=signal["github_profile_name"],
-            github_profile_email=signal["github_profile_email"],
-            matched_jira_profiles=[],
-            notes=f"Agent error: {exc}",
-        )
+        stub.notes = f"Agent error: {exc}"
+        log.error("Agent failed for %s: %s", orig_fp, exc, exc_info=True)
+        return stub
 
 
 # batch insert
@@ -161,18 +164,8 @@ def _insert_links(
 
     rows, fps = [], set()
     for out in outs:
-        fp = "|".join(
-            str(v or "none")
-            for v in (
-                out.github_user_id,
-                out.github_login,
-                out.git_email,
-                out.git_name,
-                out.github_profile_email,
-                out.github_profile_name,
-            )
-        )
-        if not out.matched_jira_profiles:  # no match
+        fp = out.signal_fingerprint or "unknown"
+        if not out.matched_jira_profiles:
             rows.append(
                 (
                     fp,
@@ -236,6 +229,7 @@ def _insert_links(
 # main async pipeline
 async def _pipeline() -> None:
     with _db(DB_SUBSET) as conn:
+        _ensure_table(conn)
         signals = _pending_signals(conn, LIMIT)
         if not signals:
             log.info("Nothing to resolve.")
