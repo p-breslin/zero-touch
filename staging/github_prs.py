@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 
 DEFAULT_DAYS_TO_FETCH = 90
 READ_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_NAME']}.duckdb")
-WRITE_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_SUBSET_NAME']}.duckdb")
+WRITE_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_STAGING_NAME']}.duckdb")
 
 COMPANY = os.environ["COMPANY_NAME"]
 SCHEMA = f"{COMPANY}_GITHUB_"

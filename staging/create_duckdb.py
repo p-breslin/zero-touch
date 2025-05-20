@@ -5,7 +5,7 @@ from pathlib import Path
 from scripts.paths import DATA_DIR
 
 load_dotenv()
-db_filename = f"{os.getenv('DUCKDB_SUBSET_NAME')}.duckdb"
+db_filename = f"{os.getenv('DUCKDB_STAGING_NAME')}.duckdb"
 savepath = Path(DATA_DIR / db_filename)
 
 # Delete existing file to ensure it's empty

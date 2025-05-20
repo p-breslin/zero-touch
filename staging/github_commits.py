@@ -30,7 +30,7 @@ COMPANY = os.environ["COMPANY_NAME"]
 SCHEMA_GH = f"{COMPANY}_GITHUB_"
 
 SRC_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_NAME']}.duckdb")
-STG_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_SUBSET_NAME']}.duckdb")
+STG_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_STAGING_NAME']}.duckdb")
 
 T_COMMITS = "GITHUB_COMMITS"
 T_STAGED_PRS = "GITHUB_PRS"

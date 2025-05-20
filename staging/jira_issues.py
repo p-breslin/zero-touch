@@ -32,7 +32,7 @@ TABLE_JIRA_USER_PROF = "JIRA_USER_PROFILES"  # user -> email (subset)
 MAIN_JIRA_SCHEMA = f"{COMPANY_NAME}_JIRA_"
 
 READ_DB_MAIN = Path(DATA_DIR, f"{os.environ['DUCKDB_NAME']}.duckdb")
-WRITE_DB_SUB = Path(DATA_DIR, f"{os.environ['DUCKDB_SUBSET_NAME']}.duckdb")
+WRITE_DB_SUB = Path(DATA_DIR, f"{os.environ['DUCKDB_STAGING_NAME']}.duckdb")
 
 
 # DuckDB management

@@ -27,7 +27,7 @@ COMPANY_NAME = os.environ["COMPANY_NAME"]
 
 MAIN_JIRA_SCHEMA = f"{COMPANY_NAME}_JIRA_"
 READ_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_NAME']}.duckdb")
-WRITE_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_SUBSET_NAME']}.duckdb")
+WRITE_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_STAGING_NAME']}.duckdb")
 
 
 # helpers
