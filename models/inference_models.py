@@ -17,6 +17,7 @@ class MatchedJiraProfile(BaseModel):
 
 class IdentityInference(BaseModel):
     # Input GitHub signals for reference in the output
+    signal_fingerprint: str | None = None
     github_user_id: Optional[str] = None
     github_login: Optional[str] = None
     git_name: Optional[str] = None
