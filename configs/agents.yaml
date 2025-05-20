@@ -1,6 +1,7 @@
-Issue_Key_Agent:
+PR_Issue_Key_Inference:
   description: >
-    You are an AI assistant specialized in extracting JIRA issue keys from GitHub commit messages.
+    You are an AI assistant specialized in extracting JIRA issue keys from text,
+    typically sourced from GitHub Pull Request titles and bodies, or commit messages. Your primary goal is to identify the first valid JIRA issue key present.
   provider: "openai"
   model_id: "gpt-4.1-nano"
   prompt_key: "issue_key_inference"

@@ -1,6 +1,15 @@
+"""
+Extracts JIRA issue keys from GitHub Pull Request titles and bodies.
+
+    1. Fetches PRs from the GITHUB_PRS table in the staging DB
+       where EXTRACTED_JIRA_KEY is NULL.
+    2. Concatenates PR TITLE and BODY to form input text for the Agent.
+    3. Invokes an Agent to extract the first JIRA key.
+    4. Updates the EXTRACTED_JIRA_KEY column in the GITHUB_PRS table for the processed PR.
+"""
+
 from __future__ import annotations
 import os
-import duckdb
 import asyncio
 import logging
 from pathlib import Path
@@ -8,118 +17,105 @@ from dotenv import load_dotenv
 from typing import List, Tuple
 from agno.agent import RunResponse
 
+from models import IssueKey
 from scripts.paths import DATA_DIR
 from utils.helpers import db_manager
 from agents.agent_builder import build_agent
 from utils.logging_setup import setup_logging
 
-# configuration
+
+# Configuration ----------------------------------------------------------------
 load_dotenv()
 setup_logging()
 log = logging.getLogger(__name__)
 
-TABLE_COMMITS = "GITHUB_COMMITS"
-DB_SUBSET = Path(DATA_DIR, f"{os.environ['DUCKDB_SUBSET_NAME']}.duckdb")
-
-PROCESS_LIMIT = int(os.getenv("PROCESS_LIMIT", 1000))
-CONCURRENCY_LIMIT = int(os.getenv("CONCURRENCY_LIMIT", 100))
-
-
-def _fetch_commits(
-    conn: duckdb.DuckDBPyConnection, limit: int
-) -> List[Tuple[str, str]]:
-    rows = conn.execute(
-        f"""
-        SELECT commit_sha, commit_message
-        FROM "{TABLE_COMMITS}"
-        WHERE extracted_issue_key IS NULL
-        LIMIT {limit};
-        """
-    ).fetchall()
-    log.info("Fetched %d commits needing extraction", len(rows))
-    return rows
+DB_PATH = Path(DATA_DIR, f"{os.environ['DUCKDB_SUBSET_NAME']}.duckdb")
+T_PRS = "GITHUB_PRS"
+LIMIT = int(os.getenv("PR_KEY_PROCESS_LIMIT", 1000))
+CONCUR = int(os.getenv("PR_KEY_CONCURRENCY_LIMIT", 50))
+AGENT_KEY = "Issue_Key_Agent"
 
 
-def _batch_update(
-    conn: duckdb.DuckDBPyConnection, updates: List[Tuple[str, str]]
-) -> None:
-    if not updates:
+# SQL helpers ------------------------------------------------------------------
+def _load_prs(conn, limit: int) -> List[Tuple[str, str, str]]:
+    """
+    Queries the GITHUB_PRS table in the staging DB. Delects the INTERNAL_ID, TITLE, and BODY for PRs where the EXTRACTED_JIRA_KEY is currently NULL, up to a specified limit, and returns these records as a list of tuples.
+    """
+    q = f"""
+        SELECT INTERNAL_ID, TITLE, BODY
+        FROM   {T_PRS}
+        WHERE  EXTRACTED_JIRA_KEY IS NULL
+        LIMIT  {limit};
+    """
+    return conn.execute(q).fetchall()
+
+
+def _update_keys(conn, rows: List[Tuple[str, str]]):
+    """
+    Takes a list of tuples (extracted JIRA key and a PR INTERNAL_ID). Executes a batch UPDATE statement on the GITHUB_PRS table in the staging DB, setting the EXTRACTED_JIRA_KEY for each corresponding INTERNAL_ID.
+    """
+    if not rows:
         return
 
     conn.executemany(
-        f"""
-        UPDATE "{TABLE_COMMITS}"
-        SET extracted_issue_key = ?
-        WHERE commit_sha = ?;
-        """,
-        updates,  # (key, sha)
+        f"""UPDATE {T_PRS} SET EXTRACTED_JIRA_KEY = ? WHERE INTERNAL_ID = ?;""",
+        rows,
     )
     conn.commit()
-    log.info("Wrote %d extracted keys to DB", len(updates))
+    log.info("Updated %d PR rows with extracted keys", len(rows))
 
 
-# Agent runner
-async def _extract_key(sha: str, message: str) -> Tuple[str, str | None]:
-    agent = build_agent("Issue_Key_Agent")
-    if not agent:
-        log.error("Agent build failed for SHA %s", sha)
-        return sha, None
+# Agent logic ------------------------------------------------------------------
+async def _extract(
+    agent, pr_id: str, title: str | None, body: str | None
+) -> Tuple[str, str]:
+    """
+    Builds an Agent insatnce and gives it a concatenated PR title and body. Processeses the agent's response and returns a tuple containing the original pr_id and the extracted JIRA key string (or an empty string if no key is found or an error occurs).
+    """
+    txt = "\n\n".join(p for p in (title, body) if p).strip()
+    if not txt:
+        return pr_id, ""  # treat as processed, no key
 
     try:
-        resp: RunResponse = await agent.arun(message=message)
-        key: str | None = (
-            getattr(resp.content, "key", None) if resp and resp.content else None
+        agent = build_agent(AGENT_KEY)
+        resp: RunResponse = await agent.arun(message=txt)
+        key_obj: IssueKey | None = (
+            resp.content if isinstance(resp.content, IssueKey) else None
         )
-        key = key.strip() if key else ""  # ''->processed/no-match, None->error
-        log.debug("SHA %s -> key '%s'", sha, key)
-        return sha, key
+        key = (key_obj.key or "").strip() if key_obj else ""
+        return pr_id, key
     except Exception as exc:
-        log.error("Agent raised for SHA %s: %s", sha, exc, exc_info=True)
-        return sha, None
+        log.error("Agent error for PR %s: %s", pr_id, exc, exc_info=True)
+        return pr_id, ""  # leave blank on error
 
 
-# Orchestration
-async def _process_commits() -> None:
-    # open DB once for the whole run
-    with db_manager(DB_SUBSET) as conn:
-        commits = _fetch_commits(conn, PROCESS_LIMIT)
-
-        if not commits:
-            log.info("Nothing to do.")
+# Main async -------------------------------------------------------------------
+async def _run():
+    """
+    Connects to the staging DB, fetches PRs needing key extraction, and concurrently processes these PRs. Collects all the results and updates the database in a single batch.
+    """
+    with db_manager(DB_PATH) as conn:
+        prs = _load_prs(conn, LIMIT)
+        if not prs:
+            log.info("No PRs need key extraction.")
             return
 
-        semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
-        results: List[Tuple[str, str | None]] = []
+        sem = asyncio.Semaphore(CONCUR)
 
-        async def _wrap(sha: str, msg: str):
-            async with semaphore:
-                return await _extract_key(sha, msg)
+        async def worker(rec):
+            pid, t, b = rec
+            async with sem:
+                return await _extract(pid, t, b)
 
-        tasks = [_wrap(sha, msg) for sha, msg in commits]
-
-        for coro in asyncio.as_completed(tasks):
-            sha, key = await coro
-            if key is not None:  # skip rows where agent errored
-                results.append((key, sha))  # INSERT order = (key, sha)
-
-            # flush in batches of CONCURRENCY_LIMIT to keep mem low
-            if len(results) >= CONCURRENCY_LIMIT:
-                _batch_update(conn, results)
-                results.clear()
-
-        # final flush
-        _batch_update(conn, results)
+        updates = await asyncio.gather(*[worker(r) for r in prs])
+        _update_keys(conn, updates)
 
 
-# entry point
-def main() -> None:
-    log.info(
-        "Extracting JIRA keys (limit=%d, concurrency=%d)",
-        PROCESS_LIMIT,
-        CONCURRENCY_LIMIT,
-    )
-    asyncio.run(_process_commits())
-    log.info("Finished.")
+# Entry point ------------------------------------------------------------------
+def main():
+    log.info("Extracting JIRA keys from PRs (limit=%d, concur=%d)", LIMIT, CONCUR)
+    asyncio.run(_run())
+    log.info("Finished PR key extraction")
 
 
 if __name__ == "__main__":
