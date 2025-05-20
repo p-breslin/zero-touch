@@ -57,9 +57,12 @@ def _update_keys(conn, rows: List[Tuple[str, str]]):
     if not rows:
         return
 
+    # We need (extracted_key, internal_id) for executemany (swap order)
+    remapped_rows = [(key, pr_id) for pr_id, key in rows]
+
     conn.executemany(
         f"""UPDATE {T_PRS} SET EXTRACTED_JIRA_KEY = ? WHERE INTERNAL_ID = ?;""",
-        rows,
+        remapped_rows,
     )
     conn.commit()
     log.info("Updated %d PR rows with extracted keys", len(rows))
