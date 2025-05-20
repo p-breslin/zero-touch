@@ -1,6 +1,6 @@
 import logging
 from sqlalchemy import Engine
-from typing import Any, Dict, Optional
+from typing import Any, List, Dict, Optional
 
 from agents.base_agent import build_base_agent
 from utils.helpers import load_yaml, resolve_model
@@ -17,6 +17,7 @@ MAPPINGS = {"IssueKeys": IssueKeys}
 
 def build_agent(
     agent_key: str,
+    tools: Optional[List] = None,
     session_state: Optional[Dict[str, Any]] = None,
     db_engine: Optional[Engine] = None,
     knowledge_base: Optional[AgentKnowledge] = None,
@@ -38,7 +39,6 @@ def build_agent(
     # Load configuration params
     model_id = cfg.get("model_id", None)
     provider = cfg.get("provider", "openai")
-    tools = cfg.get("tools", None)
     description = cfg.get("description", None)
     prompt_key = cfg.get("prompt_key", None)
     response_model = cfg.get("response_model", None)
@@ -63,7 +63,7 @@ def build_agent(
         LLM_reasoning_model = None
 
     # Resolve tools
-    selected_tools = [SQLTools(db_engine=db_engine)] if tools else []
+    selected_tools = tools if tools else []
     if thinking_tools:
         selected_tools.append(ThinkingTools(add_instructions=True))
 
