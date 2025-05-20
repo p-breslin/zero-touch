@@ -61,7 +61,7 @@ SELECT
     "NAME" AS display_name,
     "EMAIL"AS email_address
 FROM "{MAIN_JIRA_SCHEMA}"."USERS_SUMMARY"
-WHERE "ACCOUNTID" IS NOT NULL;
+WHERE "ID" IS NOT NULL;
 """
 
 
