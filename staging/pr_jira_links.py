@@ -72,29 +72,38 @@ CREATE TABLE IF NOT EXISTS {T_LINKS} (
 """
 
 SELECT_LINK_ROWS = f"""
-SELECT
-    prs.INTERNAL_ID            AS {COLS[0]},
-    prs.REPO                   AS {COLS[1]},
-    prs.ORG                    AS {COLS[2]},
-    prs.USER_LOGIN             AS {COLS[3]},
-    prs.ROLE_IN_PR             AS {COLS[4]},
-    prs.EXTRACTED_JIRA_KEY     AS {COLS[5]},
-    ji.ASSIGNEE_DISPLAY_NAME   AS {COLS[6]},
-    ji.ASSIGNEE_ACCOUNT_ID     AS {COLS[7]},
-    ji.ASSIGNEE_EMAIL          AS {COLS[8]},
-    ji.REPORTER_DISPLAY_NAME   AS {COLS[9]},
-    ji.REPORTER_ACCOUNT_ID     AS {COLS[10]},
-    ji.REPORTER_EMAIL          AS {COLS[11]},
-    ji.PROJECT_NAME            AS {COLS[12]},
-    ji.PROJECT_KEY             AS {COLS[13]},
-    ji.ISSUE_TYPE_NAME         AS {COLS[14]},
-    ji.SUMMARY                 AS {COLS[15]},
-    ji.DESCRIPTION             AS {COLS[16]}
-FROM   {T_PRS} prs
-LEFT JOIN {T_JIRA} ji
-       ON prs.EXTRACTED_JIRA_KEY = ji.ISSUE_KEY
-WHERE  prs.EXTRACTED_JIRA_KEY IS NOT NULL
-  AND  prs.EXTRACTED_JIRA_KEY <> ''
+WITH src AS (
+    SELECT
+        prs.INTERNAL_ID            AS {COLS[0]},
+        prs.REPO                   AS {COLS[1]},
+        prs.ORG                    AS {COLS[2]},
+        prs.USER_LOGIN             AS {COLS[3]},
+        prs.ROLE_IN_PR             AS {COLS[4]},
+        prs.EXTRACTED_JIRA_KEY     AS {COLS[5]},
+        ji.ASSIGNEE_DISPLAY_NAME   AS {COLS[6]},
+        ji.ASSIGNEE_ACCOUNT_ID     AS {COLS[7]},
+        ji.ASSIGNEE_EMAIL          AS {COLS[8]},
+        ji.REPORTER_DISPLAY_NAME   AS {COLS[9]},
+        ji.REPORTER_ACCOUNT_ID     AS {COLS[10]},
+        ji.REPORTER_EMAIL          AS {COLS[11]},
+        ji.PROJECT_NAME            AS {COLS[12]},
+        ji.PROJECT_KEY             AS {COLS[13]},
+        ji.ISSUE_TYPE_NAME         AS {COLS[14]},
+        ji.SUMMARY                 AS {COLS[15]},
+        ji.DESCRIPTION             AS {COLS[16]},
+        row_number() OVER (PARTITION BY ji.ISSUE_KEY
+                           ORDER BY prs.INTERNAL_ID) AS rn
+    FROM   {T_PRS} prs
+    LEFT  JOIN {T_JIRA} ji
+           ON prs.EXTRACTED_JIRA_KEY = ji.ISSUE_KEY
+    WHERE  prs.EXTRACTED_JIRA_KEY IS NOT NULL
+      AND  prs.EXTRACTED_JIRA_KEY <> ''
+      AND  ji.ASSIGNEE_ACCOUNT_ID IS NOT NULL
+      AND  ji.ASSIGNEE_ACCOUNT_ID = ji.REPORTER_ACCOUNT_ID
+)
+SELECT {", ".join(f"{c}" for c in COLS)}
+FROM   src
+WHERE  rn = 1
 """
 
 # Build SET clause excluding PK columns ----------------------------------------
