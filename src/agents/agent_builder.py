@@ -9,10 +9,10 @@ from agno.tools.sql import SQLTools
 from agno.tools.thinking import ThinkingTools
 from agno.knowledge.agent import AgentKnowledge
 
-from models import IssueKey
+from models import IssueKey, InferredRole
 
 log = logging.getLogger(__name__)
-MAPPINGS = {"IssueKey": IssueKey}
+MAPPINGS = {"IssueKey": IssueKey, "InferredRole": InferredRole}
 
 
 def build_agent(

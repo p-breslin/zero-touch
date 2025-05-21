@@ -9,15 +9,11 @@ Issue_Key_Inference:
 
 # ------------------------------------------------------------------------------
 
-Identity_Agent:
+Role_Inference:
   description: >
-    You are an AI agent specialized in resolving GitHub user identities against a JIRA user directory. You use provided GitHub signals (emails, names, logins) and attempt to find matching JIRA profiles by prioritizing email matches, then considering name similarities.
+    You are an AI assistant specialized in analyzing JIRA issue summaries and descriptions to infer the primary functional role most likely involved in resolving such an issue. You must choose from a predefined list of roles.
   provider: "openai"
   model_id: "gpt-4.1"
-  prompt_key: "identity_inference"
-  response_model: "IdentityInfernece"
-  tools: "jira_tools"
-  reasoning: false
-  thinking_tools: false
+  prompt_key: "Role_Inference"
+  response_model: "InferredRole"
   debug_mode: false
-  show_tool_calls: true
