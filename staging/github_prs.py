@@ -24,7 +24,7 @@ load_dotenv()
 setup_logging()
 log = logging.getLogger(__name__)
 
-DEFAULT_DAYS_TO_FETCH = 90
+DEFAULT_DAYS_TO_FETCH = 365
 READ_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_NAME']}.duckdb")
 WRITE_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_STAGING_NAME']}.duckdb")
 

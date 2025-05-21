@@ -31,7 +31,7 @@ log = logging.getLogger(__name__)
 
 T_COMMITS = "GITHUB_COMMITS"
 DB_PATH = Path(DATA_DIR, f"{os.environ['DUCKDB_STAGING_NAME']}.duckdb")
-LIMIT = int(os.getenv("COMMIT_KEY_PROCESS_LIMIT", 1000))
+LIMIT = int(os.getenv("COMMIT_KEY_PROCESS_LIMIT", 5000))
 CONCUR = int(os.getenv("COMMIT_KEY_CONCURRENCY_LIMIT", 100))
 AGENT_KEY = "Issue_Key_Inference"
 

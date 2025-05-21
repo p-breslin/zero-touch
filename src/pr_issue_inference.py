@@ -32,7 +32,7 @@ log = logging.getLogger(__name__)
 
 DB_PATH = Path(DATA_DIR, f"{os.environ['DUCKDB_STAGING_NAME']}.duckdb")
 T_PRS = "GITHUB_PRS"
-LIMIT = int(os.getenv("PR_KEY_PROCESS_LIMIT", 1000))
+LIMIT = int(os.getenv("PR_KEY_PROCESS_LIMIT", 5000))
 CONCUR = int(os.getenv("PR_KEY_CONCURRENCY_LIMIT", 100))
 AGENT_KEY = "Issue_Key_Inference"
 
