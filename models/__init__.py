@@ -1,4 +1,4 @@
-from .inference_models import IssueKey, InferredRole
+from .inference_models import IssueKey, RepoLabel, CommitterInfo
 
 
-__all__ = ["IssueKey", "InferredRole"]
+__all__ = ["IssueKey", "RepoLabel", "CommitterInfo"]

@@ -23,34 +23,74 @@ Issue_Key_Inference: >
 
 # ------------------------------------------------------------------------------
 
-Role_Inference: >
+Repo_Label_Inference: >
   # Role and Objective
-  You are an expert role classifier. Your task is to analyze the provided JIRA issue summary and description
-  and infer which of the following functional roles would most likely be primarily responsible for or involved
-  in addressing this type of issue:
+  You are an expert code analyst. Your objective is to analyze the provided aggregated source code from a GitHub repository and derive a single, concise, and general functional label that best represents the main purpose or category of the repository.
+
+  # Labeling Guidelines:
+  - The label must be **very general** and describe the repository's primary function.
+  - The label must be a maximum of **two words**.
+  - Use **Title Case** for the label (e.g., "Data Pipeline", not "data pipeline").
+  - Focus on the *primary* function. If a repository does many things, identify its most significant purpose.
+
+  # Input
+  You will receive a block of text representing aggregated source code from various files within a repository.
+
+  # Instructions for Deriving the Label:
+  - Carefully analyze the overall nature of the provided code.
+  - Identify dominant programming languages, key libraries/frameworks, common patterns, and the types of problems being solved.
+  - Synthesize this understanding into a very general, 1-to-2-word functional label.
+  - Place your derived label string into the 'label' field of the output JSON structure.
+  - Do not add any other explanatory text, greetings, apologies, or reasoning in your response.
+
+  # Output Structure Reminder
+  The expected output must conform to a JSON structure containing a single field named 'label'.
+
+# ------------------------------------------------------------------------------
+
+Committer_Info_Inference: >
+  # Role and Objective
+  You are an expert code and skills analyst. Your objective is to analyze the provided aggregated source code from a software committer to:
+  1. Infer their primary functional role from a predefined list.
+  2. Extract a list of 3-7 key technical skills, programming languages, or frameworks evident from their code.
+
+  # Input
+  You will receive a block of text representing aggregated source code snippets
+  attributed to a single committer. This code may span multiple files or projects.
+
+  # Predefined Functional Roles (Choose EXACTLY ONE for the 'role' field):
   - "Full Stack Engineer"
   - "UX"
   - "Backend Engineer"
   - "AI Engineer"
+  - "DevOps"
 
-  If the text does not provide enough information to confidently determine one of these specific roles,
-  or if the issue seems to fall outside these categories, you must select "Unknown".
+  # Instructions for Inferring Role:
+  - Based on the overall nature, dominant languages, libraries, and problem domains in the code, select the single most fitting functional role from the predefined list above.
+  - Consider these heuristics:
+    - "UX": Predominantly UI-related code (e.g., React, Angular, Vue, Swift UI, HTML/CSS, JavaScript for frontend).
+    - "Backend Engineer": Predominantly server-side logic, APIs, database interactions, system architecture (e.g., Java, Python/Django/Flask, Node.js, Go, C#/.NET, SQL).
+    - "Full Stack Engineer": Significant contributions to both frontend and backend components, or broad system-level work.
+    - "AI Engineer": Code involving machine learning, data science, NLP, computer vision.
+    - "DevOps": Code primarily focused on infrastructure as code (e.g., Terraform, CloudFormation, Ansible, Puppet, Chef), CI/CD pipeline configurations (e.g., Jenkinsfile, GitHub Actions YAML, GitLab CI YAML), scripting for automation (e.g., Bash, Python for system tasks), containerization (e.g., Dockerfiles), and orchestration (e.g., Kubernetes manifests).
 
-  # Input
-  You will be given a concatenated string containing the JIRA issue's summary and description.
+  # Instructions for Extracting Skills:
+  - From the provided code, identify specific technical skills, programming languages, frameworks, tools, or significant libraries used.
+  - Aim for a list of 3 to 7 key skills.
+  - Examples of skills: "Python", "JavaScript", "React", "Node.js", "SQL", "AWS Lambda", "Terraform", "Docker", "Kubernetes", "Data Analysis", "Algorithm Design", "API Design", "Mobile Development (iOS)", "Machine Learning".
+  - Be specific where possible (but do not name libraries).
 
-  # Instructions
-  - Carefully read and understand the issue's summary and description.
-  - Consider keywords, technologies mentioned, problem domain, and the nature of the tasks implied.
-  - Match the issue's characteristics to the most appropriate functional role from the predefined list.
-    - "UX": Issues related to user interface design, user experience, usability, visual design, user flows, wireframes, prototypes, user research.
-    - "Backend Engineer": Issues related to server-side logic, APIs, databases, system architecture, performance, scalability, data processing (non-AI).
-    - "Full Stack Engineer": Issues that require work on both frontend and backend components, or broad system-level tasks not clearly fitting UX or specialized backend/AI.
-    - "AI Engineer": Issues specifically involving machine learning models, data science, algorithms, AI research, neural networks, natural language processing, computer vision.
-  - You **must** choose exactly one role from the list: "Full Stack Engineer", "UX", "Backend Engineer", "AI Engineer", or "Unknown".
-  - Place your chosen role string into the 'role' field of the output structure.
-  - Do not add any other explanatory text, greetings, or apologies.
+  # Output Structure:
+  Your response MUST be a JSON object conforming to the following structure:
+  {
+    "role": "CHOSEN_ROLE_FROM_PREDEFINED_LIST",
+    "skills": ["Skill1", "Skill2", "Skill3", ...]
+  }
+  - The 'role' field must contain exactly one string from the predefined role list.
+  - The 'skills' field must be a list of strings.
 
-  # Output Structure Reminder
-  The expected output must conform to a JSON structure containing a single field named 'role'.
-  This field will hold one of the predefined role strings. Example: {"role": "Backend Engineer"}
+  # General Guidelines:
+  - Analyze the code holistically.
+  - Do not add any other explanatory text, greetings, apologies, or reasoning outside the structured JSON output.
+
+# ------------------------------------------------------------------------------

@@ -5,14 +5,18 @@ from typing import Any, List, Dict, Optional
 from agents.base_agent import build_base_agent
 from utils.helpers import load_yaml, resolve_model
 
-from agno.tools.sql import SQLTools
+# from agno.tools.sql import SQLTools
 from agno.tools.thinking import ThinkingTools
 from agno.knowledge.agent import AgentKnowledge
 
-from models import IssueKey, InferredRole
+from models import IssueKey, RepoLabel, CommitterInfo
 
 log = logging.getLogger(__name__)
-MAPPINGS = {"IssueKey": IssueKey, "InferredRole": InferredRole}
+MAPPINGS = {
+    "IssueKey": IssueKey,
+    "RepoLabel": RepoLabel,
+    "CommitterInfo": CommitterInfo,
+}
 
 
 def build_agent(
@@ -46,6 +50,7 @@ def build_agent(
     reasoning_model_id = cfg.get("reasoning_model_id", None)
     thinking_tools = cfg.get("thinking_tools", None)
     markdown = cfg.get("markdown", None)
+    temperature = cfg.get("temperature", 0)
     debug_mode = cfg.get("debug_mode", False)
     show_tool_calls = cfg.get("show_tool_calls", False)
     add_datetime_to_instructions = cfg.get("add_datetime_to_instructions", False)
@@ -54,7 +59,9 @@ def build_agent(
 
     # Resolve models
     response_model = MAPPINGS.get(response_model, None)
-    LLM_base_model = resolve_model(provider=provider, model_id=model_id)
+    LLM_base_model = resolve_model(
+        provider=provider, model_id=model_id, temperature=temperature
+    )
     if reasoning:
         LLM_reasoning_model = resolve_model(
             provider=provider, model_id=reasoning_model_id, reasoning=True

@@ -9,11 +9,30 @@ Issue_Key_Inference:
 
 # ------------------------------------------------------------------------------
 
-Role_Inference:
+Repo_Label_Inference:
   description: >
-    You are an AI assistant specialized in analyzing JIRA issue summaries and descriptions to infer the primary functional role most likely involved in resolving such an issue. You must choose from a predefined list of roles.
+    You are an AI assistant specialized in analyzing aggregated source code from
+    software repositories. Your task is to derive a concise, general functional label (maximum two words) that best describes the repository's primary purpose based on its code.
   provider: "openai"
-  model_id: "gpt-4.1"
-  prompt_key: "Role_Inference"
-  response_model: "InferredRole"
+  model_id: "gpt-4o"
+  prompt_key: "Repo_Label_Inference"
+  response_model: "RepoLabel"
+  temperature: 0.7
   debug_mode: false
+
+# ------------------------------------------------------------------------------
+
+Committer_Info_Inference:
+  description: >
+    You are an AI assistant specialized in analyzing aggregated source code
+    attributed to a software committer. Your tasks are to infer the committer's
+    primary functional role and identify a list of their key technical skills
+    based on the provided code.
+  provider: "openai"
+  model_id: "gpt-4o"
+  prompt_key: "Committer_Info_Inference"
+  response_model: "CommitterInfo"
+  temperature: 0.7
+  debug_mode: false
+
+# ------------------------------------------------------------------------------
