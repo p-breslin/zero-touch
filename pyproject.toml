@@ -12,6 +12,7 @@ dependencies = [
     "duckdb-engine>=0.17.0",
     "google-genai>=1.14.0",
     "openai>=1.77.0",
+    "pygithub>=2.6.1",
     "snowflake>=1.4.0",
     "snowflake-sqlalchemy>=1.7.3",
     "sqlalchemy>=2.0.40",
