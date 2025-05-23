@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 import yaml
 import json
@@ -28,27 +29,31 @@ def load_yaml(file, key=None):
         log.error(f"Error loading {file}: {e}")
 
 
-def resolve_model(provider: str, model_id: str, reasoning: bool = False):
+def resolve_model(
+    provider: str, model_id: str, temperature: float = 0, reasoning: bool = False
+):
     """Selects LLM provider and model."""
     try:
         if provider == "openai":
             if reasoning:
                 return OpenAIChat(id=model_id)
             else:
-                return OpenAIChat(id=model_id, temperature=0)
+                return OpenAIChat(id=model_id, temperature=temperature)
 
         elif provider == "google":
             if reasoning:
                 return Gemini(id=model_id)
             else:
-                return Gemini(id=model_id, temperature=0)
+                return Gemini(id=model_id, temperature=temperature)
 
         elif provider == "openrouter":
             if reasoning:
                 return OpenRouter(id=model_id, api_key=os.getenv("OPENROUTER_API_KEY"))
             else:
                 return OpenRouter(
-                    id=model_id, api_key=os.getenv("OPENROUTER_API_KEY"), temperature=0
+                    id=model_id,
+                    api_key=os.getenv("OPENROUTER_API_KEY"),
+                    temperature=temperature,
                 )
     except Exception as e:
         log.error(f"Error loading LLM provider/model: {e}")
