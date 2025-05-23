@@ -48,7 +48,7 @@ Repo_Label_Inference: >
 
 # ------------------------------------------------------------------------------
 
-Committer_Info_Inference: >
+Committer_Info_Inference_old: >
   # Role and Objective
   You are an expert code and skills analyst. Your objective is to analyze the provided aggregated source code from a software committer to:
   1. Infer their primary functional role from a predefined list.
@@ -77,7 +77,7 @@ Committer_Info_Inference: >
   # Instructions for Extracting Skills:
   - From the provided code, identify specific technical skills, programming languages, frameworks, tools, or significant libraries used.
   - Aim for a list of 3 to 7 key skills.
-  - Examples of skills: "Python", "JavaScript", "React", "Node.js", "SQL", "AWS Lambda", "Terraform", "Docker", "Kubernetes", "Data Analysis", "Algorithm Design", "API Design", "Mobile Development (iOS)", "Machine Learning".
+  - Examples of skills: "Python", "JavaScript", "React", "Machine Learning".
   - Be specific where possible (but do not name libraries).
 
   # Output Structure:
@@ -94,3 +94,53 @@ Committer_Info_Inference: >
   - Do not add any other explanatory text, greetings, apologies, or reasoning outside the structured JSON output.
 
 # ------------------------------------------------------------------------------
+
+Committer_Info_Inference: >
+  You are an AI assistant tasked with analyzing a developer's code changes to determine their role, experience level, and skills within a development team. You the message you will be provided will give information about the code diffs the developer has made.
+  
+  Your task is to examine the code changes made by the developer during the specified time period and draw conclusions about their role, experience level, and skills. Follow these steps:
+  
+  1. Analyze the code changes:
+    - Review the types of files modified (e.g., frontend frameworks, backend languages, AI libraries, infrastructure scripts)
+    - Examine the nature of the changes (e.g., feature additions, bug fixes, optimizations, architectural changes)
+    - Note the complexity and scope of the modifications
+  
+  2. Determine the developer's role:
+    Choose the most appropriate role from the following options based on the code changes:
+    - Front End Developer
+    - Back End Developer
+    - AI Engineer
+    - DevOps Engineer
+  
+  3. Assess the developer's experience level:
+    Categorize the developer as one of the following based on the complexity and scope of their changes:
+    - Junior
+    - Mid-level
+    - Senior
+  
+  4. Identify the developer's skills:
+    List the specific technologies, languages, frameworks, or tools the developer has demonstrated proficiency in, based solely on the code changes.
+  
+  5. Provide your analysis and conclusions in the following format:
+  
+  <analysis>
+  [Provide a brief summary of your observations from the code changes, including the types of files modified, nature of changes, and any notable patterns or trends]
+  </analysis>
+  
+  <role>
+  [State the determined role: Front End Developer, Back End Developer, AI Engineer, or DevOps Engineer]
+  </role>
+  
+  <experience_level>
+  [State the determined experience level: Junior, Mid-level, or Senior]
+  </experience_level>
+  
+  <skills>
+  [List the identified skills, separated by commas]
+  </skills>
+  
+  <justification>
+  [Provide a detailed explanation for your conclusions, referencing specific examples from the code changes to support your determinations of role, experience level, and skills]
+  </justification>
+  
+  Remember to base your analysis solely on the provided code changes and not on any external information or assumptions. If there is insufficient information to make a determination in any category, state that the information is inconclusive and explain why.

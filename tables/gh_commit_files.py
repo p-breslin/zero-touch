@@ -90,9 +90,9 @@ def _files_for_commit(repo_obj, sha: str) -> List[Tuple[str, str]]:
     for f in commit.files:
         if getattr(f, "status", "") == "removed":
             continue
-        code = _fetch_blob(repo_obj, f.sha)
-        if code is not None:
-            out.append((f.filename, code))
+        patch = getattr(f, "patch", None)  # this is the unified diff
+        if patch is not None:
+            out.append((f.filename, patch))
     return out
 
 
