@@ -4,24 +4,24 @@ import logging
 from pathlib import Path
 from dotenv import load_dotenv
 from scripts.paths import DATA_DIR
-from utils.logging_setup import setup_logging
 from utils.helpers import db_manager
+from utils.logging_setup import setup_logging
+
 
 # Configuration ----------------------------------------------------------------
 load_dotenv()
 setup_logging()
 log = logging.getLogger(__name__)
-
 STG_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_STAGING_NAME']}.duckdb")
 
-# SQL block (no truncation, includes COMMITTER_NAME, removes role/skills) -----
-SQL_CREATE_COMMITTER_CODE_SUMMARIES = """
-CREATE OR REPLACE TABLE COMMITTER_CODE_SUMMARIES AS
+# SQL block --------------------------------------------------------------------
+SQL_CREATE_COMMITTER_DIFFS = """
+CREATE OR REPLACE TABLE COMMITTER_DIFFS AS
 WITH annotated AS (
     SELECT
         COMMITTER_ID,
         COMMITTER_NAME,
-        CODE_TEXT AS code_diff
+        CODE_TEXT AS CODE_DIFF
     FROM GITHUB_COMMIT_FILES
     WHERE COMMITTER_ID IS NOT NULL
       AND CODE_TEXT IS NOT NULL
@@ -31,8 +31,8 @@ SELECT
     COMMITTER_ID,
     ANY_VALUE(COMMITTER_NAME) AS COMMITTER_NAME,
     STRING_AGG(
-        code_diff,
-        '\n\n--- Code change associated with new commit ---\n\n'
+        CODE_DIFF,
+        '\n\n--- Diff associated with new commit ---\n\n'
     ) AS AGGREGATED_CODE
 FROM annotated
 GROUP BY COMMITTER_ID;
@@ -48,8 +48,8 @@ def _execute(conn, sql: str, table: str) -> None:
 
 def main() -> None:
     with db_manager(STG_DB) as conn:
-        _execute(conn, SQL_CREATE_COMMITTER_CODE_SUMMARIES, "COMMITTER_CODE_SUMMARIES")
-        log.info("Committer code aggregation complete.")
+        _execute(conn, SQL_CREATE_COMMITTER_DIFFS, "COMMITTER_DIFFS")
+        log.info("Committer diff code aggregation complete.")
 
 
 if __name__ == "__main__":
