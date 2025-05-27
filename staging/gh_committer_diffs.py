@@ -33,7 +33,7 @@ SELECT
     STRING_AGG(
         CODE_DIFF,
         '\n\n--- Diff associated with new commit ---\n\n'
-    ) AS AGGREGATED_CODE
+    ) AS AGGREGATED_DIFFS
 FROM annotated
 GROUP BY COMMITTER_ID;
 """

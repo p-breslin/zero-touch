@@ -18,7 +18,7 @@ load_dotenv()
 setup_logging()
 log = logging.getLogger(__name__)
 
-T_COMMITTERS = "COMMITTER_CODE_SUMMARIES"
+T_COMMITTERS = "COMMITTER_DIFFS"
 T_INFER = "DEVELOPER_INFERENCE"
 DB_PATH = Path(DATA_DIR, f"{os.environ['DUCKDB_STAGING_NAME']}.duckdb")
 LIMIT = int(os.getenv("COMMITTER_INFER_LIMIT", 1000))
@@ -38,14 +38,14 @@ def _load_committers(
 
     if T_INFER in tables:
         q = f"""
-            SELECT COMMITTER_ID, COMMITTER_NAME, AGGREGATED_CODE
+            SELECT COMMITTER_ID, COMMITTER_NAME, AGGREGATED_DIFFS
             FROM   {T_COMMITTERS}
             WHERE  COMMITTER_ID NOT IN (SELECT COMMITTER_ID FROM {T_INFER})
             LIMIT  {limit};
         """
     else:
         q = f"""
-            SELECT COMMITTER_ID, COMMITTER_NAME, AGGREGATED_CODE
+            SELECT COMMITTER_ID, COMMITTER_NAME, AGGREGATED_DIFFS
             FROM   {T_COMMITTERS}
             LIMIT  {limit};
         """
