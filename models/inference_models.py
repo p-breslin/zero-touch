@@ -6,23 +6,66 @@ class IssueKey(BaseModel):
     key: Optional[str] = None
 
 
+class ConsolidatedEntity(BaseModel):
+    canonical_name: str = Field(
+        description="The chosen primary name for the consolidated entity (e.g., full real name or recognized bot name)."
+    )
+    original_names_user_names: List[str] = Field(
+        default_factory=list,
+        description="All unique NAME entries from the source ALL_IDENTITIES table that were merged into this entity.",
+    )
+    all_jira_ids: List[str] = Field(
+        default_factory=list,
+        description="All unique JIRA IDs (from JIRA_CREATOR_IDS, JIRA_REPORTER_IDS, JIRA_ASSIGNEE_IDS) associated with this entity.",
+    )
+    all_github_ids: List[str] = Field(
+        default_factory=list,
+        description="All unique GitHub IDs (from GH_AUTHOR_IDS, GH_COMMITTER_IDS) associated with this entity.",
+    )
+    all_pr_user_ids: List[str] = Field(
+        default_factory=list,
+        description="All unique PR User IDs (from PR_USER_IDS) associated with this entity.",
+    )
+    all_emails: List[str] = Field(
+        default_factory=list,
+        description="All unique, valid email addresses associated with this entity, excluding highly generic ones unless strongly corroborated.",
+    )
+    is_bot_or_system: bool = Field(
+        default=False,
+        description="Flag indicating if this entity is primarily identified as a bot or system account.",
+    )
+    notes: Optional[str] = Field(
+        None,
+        description="Any relevant notes about this consolidated entity, e.g., reasoning for canonical name choice, confirmation of bot status, or specific source identifiers if crucial.",
+    )
+
+
+class AmbiguousLink(BaseModel):
+    entity1_identifiers: List[str] = Field(
+        description="A list of key identifiers (e.g., canonical name or primary ID from an *interim* consolidated entity) for the first entity in the ambiguous link."
+    )
+    entity2_identifiers: List[str] = Field(
+        description="A list of key identifiers for the second entity in the ambiguous link."
+    )
+    reason_for_ambiguity: str = Field(
+        description="Explanation of why the link between these (groups of) records is considered ambiguous and was not merged."
+    )
+
+
+class IdentityInference(BaseModel):
+    consolidated_entities: List[ConsolidatedEntity] = Field(
+        description="A list of all distinct individuals and system accounts identified and consolidated."
+    )
+    ambiguous_links: List[AmbiguousLink] = Field(
+        default_factory=list,
+        description="A list of links between potential entities (or groups of records) that were too ambiguous to merge confidently.",
+    )
+
+
 class RepoLabel(BaseModel):
     label: Optional[str] = Field(
         description="A concise, general functional label for the repository (max two words)."
     )
-
-
-# class CommitterInfo(BaseModel):
-#     role: Literal[
-#         "Full Stack Engineer", "UX", "Backend Engineer", "AI Engineer", "DevOps"
-#     ] = Field(
-#         ...,
-#         description="The primary functional role inferred from the committer's aggregated code.",
-#     )
-#     skills: Optional[List[str]] = Field(
-#         default_factory=list,
-#         description="A list of specific technical skills, programming languages, or frameworks evident from the code (e.g., ['Python', 'React', 'SQL', 'AWS Lambda', 'Terraform', 'Data Analysis']). Provide 3-7 key skills.",
-#     )
 
 
 class CommitterInfo(BaseModel):

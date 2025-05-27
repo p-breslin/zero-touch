@@ -9,6 +9,20 @@ Issue_Key_Inference:
 
 # ------------------------------------------------------------------------------
 
+Identity_Inference:
+  description: >
+    You are an AI assistant specialized in entity resolution. Your task is to
+    analyze records to identify and consolidate those that refer to the same individual or system entity. You will output a structured result containing consolidated entities and any ambiguous links found.
+  provider: "openai"
+  model_id: "gpt-4.1"
+  thinking: true
+  prompt_key: "Identity_Inference"
+  response_model: "IdentityInference"
+  temperature: 0.2
+  debug_mode: true
+
+# ------------------------------------------------------------------------------
+
 Repo_Label_Inference:
   description: >
     You are an AI assistant specialized in analyzing aggregated source code from
@@ -34,5 +48,4 @@ Committer_Info_Inference:
   response_model: "CommitterInfo"
   temperature: 0.7
   debug_mode: false
-
 # ------------------------------------------------------------------------------

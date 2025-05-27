@@ -9,13 +9,23 @@ from utils.helpers import load_yaml, resolve_model
 from agno.tools.thinking import ThinkingTools
 from agno.knowledge.agent import AgentKnowledge
 
-from models import IssueKey, RepoLabel, CommitterInfo
+from models import (
+    IssueKey,
+    RepoLabel,
+    CommitterInfo,
+    ConsolidatedEntity,
+    AmbiguousLink,
+    IdentityInference,
+)
 
 log = logging.getLogger(__name__)
 MAPPINGS = {
     "IssueKey": IssueKey,
     "RepoLabel": RepoLabel,
     "CommitterInfo": CommitterInfo,
+    "ConsolidatedEntity": ConsolidatedEntity,
+    "AmbiguousLink": AmbiguousLink,
+    "IdentityInference": IdentityInference,
 }
 
 
