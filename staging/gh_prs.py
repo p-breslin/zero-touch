@@ -1,12 +1,10 @@
 """
-Create / refresh GITHUB_PRS for every pull request that contains at least
-one commit already staged in GITHUB_COMMITS.
+Create / refresh GITHUB_PRS for every pull request that contains at least one commit already staged in GITHUB_COMMITS.
 
 Steps
 -----
 1. Read COMMIT_SHA list from staging.GITHUB_COMMITS.
-2. In the source DB, map SHAs → (PULL_NUMBER, ORG, REPO) via
-   PULL_REQUEST_COMMITS.
+2. In the source DB, map SHAs -> (PULL_NUMBER, ORG, REPO) via PULL_REQUEST_COMMITS.
 3. Pull PR details + reviews for those PR keys.
 4. Explode into user-role rows and insert into staging.GITHUB_PRS.
 """
