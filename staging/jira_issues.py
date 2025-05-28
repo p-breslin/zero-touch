@@ -16,10 +16,9 @@ import logging
 from pathlib import Path
 from typing import Set, Tuple
 from dotenv import load_dotenv
-
 from scripts.paths import DATA_DIR
-from utils.helpers import db_manager, safe_json
 from utils.logging_setup import setup_logging
+from utils.helpers import db_manager, safe_json
 
 
 # Configuration ----------------------------------------------------------------
