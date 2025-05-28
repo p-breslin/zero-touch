@@ -1,15 +1,16 @@
 import os
 import duckdb
 import logging
+from pathlib import Path
+from scripts.paths import DATA_DIR
 from utils.logging_setup import setup_logging
 
 setup_logging()
 log = logging.getLogger(__name__)
 
 # Paths
-# export_root = "data/snowflake_exports/sf_data"
-export_root = "data/snowflake_exports/dev"
-db_path = "data/MELTANO_DATABASE.duckdb"
+export_root = Path(DATA_DIR / "snowflake_exports/dev")
+db_path = Path(DATA_DIR / "MELTANO_DATABASE.duckdb")
 
 # Connect to DuckDB (creates file if it doesn't exist)
 con = duckdb.connect(db_path)
@@ -17,7 +18,7 @@ log.info(f"Connected to DuckDB at {db_path}")
 
 # Traverse each schema folder
 for schema_name in os.listdir(export_root):
-    schema_path = os.path.join(export_root, schema_name)
+    schema_path = Path(export_root / schema_name)
     if not os.path.isdir(schema_path):
         continue
 
@@ -28,7 +29,7 @@ for schema_name in os.listdir(export_root):
     for filename in os.listdir(schema_path):
         if filename.endswith(".csv"):
             table_name = os.path.splitext(filename)[0]
-            csv_path = os.path.join(schema_path, filename)
+            csv_path = Path(schema_path / filename)
 
             log.info(f"Loading {schema_name}.{table_name} from {csv_path}")
             con.execute(f"""

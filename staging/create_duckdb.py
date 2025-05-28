@@ -1,7 +1,7 @@
 import os
 import duckdb
-from dotenv import load_dotenv
 from pathlib import Path
+from dotenv import load_dotenv
 from scripts.paths import DATA_DIR
 
 load_dotenv()

@@ -2,7 +2,9 @@ import os
 import logging
 import argparse
 import pandas as pd
+from pathlib import Path
 from dotenv import load_dotenv
+from scripts.paths import DATA_DIR
 from utils.logging_setup import setup_logging
 from connection_manager import ConnectionManager
 
@@ -34,7 +36,7 @@ class Client:
         connection = self.conn_mgr.get_connection()
         query = f"SELECT * FROM {table_name}"
         df = pd.read_sql(query, connection)
-        output_path = os.path.join(output_dir, f"{table_name}.csv")
+        output_path = Path(output_dir / f"{table_name}.csv")
         df.to_csv(output_path, index=False)
         log.info(f"Exported {table_name} to {output_path}")
 
@@ -49,7 +51,7 @@ def main():
     if not args.schema_name:
         parser.error("You must specify schema_name")
 
-    output_dir = f"data/snowflake_exports/{args.schema_name}"
+    output_dir = Path(DATA_DIR / f"snowflake_exports/{args.schema_name}")
     os.makedirs(output_dir, exist_ok=True)
 
     client = Client(schema_name=args.schema_name)
