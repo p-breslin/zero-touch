@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 STG_DB = Path(DATA_DIR, f"{os.getenv('DUCKDB_STAGING_NAME')}.duckdb")
 T_USERS = "RESOLVABLE_USERS"
 T_LINKS = "JIRA_GITHUB"
-T_PERSON = "PERSON_INFORMATION"
+T_PERSON = "ALL_INTERACTIONS"
 
 
 # SQL block --------------------------------------------------------------------
