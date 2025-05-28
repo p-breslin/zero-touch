@@ -34,7 +34,7 @@ MAIN_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_NAME']}.duckdb")
 
 T_COMMIT_KEYS = "GITHUB_COMMITS"
 T_PR_KEYS = "GITHUB_PRS"
-T_USER_PROF = "JIRA_USER_PROFILES"
+T_USER_PROF = "JIRA_ACTIVE_USERS"
 T_TARGET = "JIRA_ISSUES"
 
 COLS = (
@@ -125,7 +125,7 @@ def _issue_row(
         if not acct_id:
             return None, None
         r = conn_stg.execute(
-            f"SELECT display_name, email FROM {T_USER_PROF} WHERE account_id=?;",
+            f"SELECT JIRA_DISPLAY_NAME, JIRA_EMAIL FROM {T_USER_PROF} WHERE JIRA_ID=?;",
             (acct_id,),
         ).fetchone()
         return r if r else (None, None)

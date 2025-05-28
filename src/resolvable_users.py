@@ -18,19 +18,19 @@ setup_logging()
 log = logging.getLogger(__name__)
 
 DB_PATH = Path(DATA_DIR, f"{os.getenv('DUCKDB_STAGING_NAME')}.duckdb")
-T_JIRA = "JIRA_USER_PROFILES"
+T_JIRA = "JIRA_ACTIVE_USERS"
 T_GH = "RESOLVABLE_GITHUB_USERS"
 T_TARGET = "RESOLVABLE_USERS"
 
 DDL = f"""
 CREATE OR REPLACE TABLE {T_TARGET} (
-    JIRA_USER_ID TEXT,
+    JIRA_ID TEXT,
     JIRA_DISPLAY_NAME TEXT,
     JIRA_EMAIL TEXT,
-    GITHUB_USER_ID TEXT,
-    GITHUB_USER_NAME TEXT,
-    GITHUB_USER_EMAIL TEXT,
-    GITHUB_USER_LOGIN TEXT,
+    GITHUB_ID TEXT,
+    GITHUB_DISPLAY_NAME TEXT,
+    GITHUB_EMAIL TEXT,
+    GITHUB_LOGIN TEXT,
     MATCHING_METHOD TEXT,
     MATCH_CONFIDENCE DOUBLE
 );
@@ -85,7 +85,7 @@ def resolve_users():
         conn.execute(DDL)
 
         jira = conn.execute(f"""
-            SELECT ACCOUNT_ID AS JIRA_USER_ID,
+            SELECT ACCOUNT_ID AS JIRA_ID,
                    DISPLAY_NAME AS JIRA_DISPLAY_NAME,
                    EMAIL AS JIRA_EMAIL
             FROM {T_JIRA}
@@ -94,7 +94,7 @@ def resolve_users():
         gh = conn.execute(f"SELECT * FROM {T_GH}").fetchdf()
 
     jira["JIRA_EMAIL_NORM"] = jira["JIRA_EMAIL"].apply(normalize_email)
-    gh["GH_EMAIL_NORM"] = gh["GITHUB_USER_EMAIL"].apply(normalize_email)
+    gh["GH_EMAIL_NORM"] = gh["GITHUB_EMAIL"].apply(normalize_email)
 
     matched_jira = set()
     matched_gh = set()
@@ -121,9 +121,7 @@ def resolve_users():
         for g_idx, g in gh.iterrows():
             if g_idx in matched_gh:
                 continue
-            g_tokens = tokenize(g["GITHUB_USER_NAME"]) | tokenize(
-                g["GITHUB_USER_LOGIN"]
-            )
+            g_tokens = tokenize(g["GITHUB_DISPLAY_NAME"]) | tokenize(g["GITHUB_LOGIN"])
             sim = jaccard_similarity(j_tokens, g_tokens)
             if sim >= 0.5:
                 results.append((*j[:3], *g[:4], "TIER_2_JACCARD", round(sim, 2)))
@@ -139,7 +137,7 @@ def resolve_users():
         for g_idx, g in gh.iterrows():
             if g_idx in matched_gh:
                 continue
-            login = (g["GITHUB_USER_LOGIN"] or "").lower()
+            login = (g["GITHUB_LOGIN"] or "").lower()
 
             for p in patterns:
                 if len(p) < 3:
@@ -165,11 +163,9 @@ def resolve_users():
                 continue
             score = max(
                 fuzz.token_set_ratio(
-                    j_clean, clean_for_fuzzy(g["GITHUB_USER_NAME"] or "")
+                    j_clean, clean_for_fuzzy(g["GITHUB_DISPLAY_NAME"] or "")
                 ),
-                fuzz.token_set_ratio(
-                    j_clean, clean_for_fuzzy(g["GITHUB_USER_LOGIN"] or "")
-                ),
+                fuzz.token_set_ratio(j_clean, clean_for_fuzzy(g["GITHUB_LOGIN"] or "")),
             )
             if score > best_score:
                 best_score = score
@@ -191,18 +187,18 @@ def resolve_users():
 
     # Write to database
     columns = [
-        "JIRA_USER_ID",
+        "JIRA_ID",
         "JIRA_DISPLAY_NAME",
         "JIRA_EMAIL",
-        "GITHUB_USER_ID",
-        "GITHUB_USER_NAME",
-        "GITHUB_USER_EMAIL",
-        "GITHUB_USER_LOGIN",
+        "GITHUB_ID",
+        "GITHUB_DISPLAY_NAME",
+        "GITHUB_EMAIL",
+        "GITHUB_LOGIN",
         "MATCHING_METHOD",
         "MATCH_CONFIDENCE",
     ]
     df = pd.DataFrame(results, columns=columns)
-    df = df[df["GITHUB_USER_ID"].notnull()]  # Keep only matched GitHub entries
+    df = df[df["GITHUB_ID"].notnull()]  # Keep only matched GitHub entries
 
     with duckdb.connect(DB_PATH) as conn:
         conn.execute(f"DELETE FROM {T_TARGET}")
