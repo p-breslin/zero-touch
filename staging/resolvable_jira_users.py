@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 
 COMPANY = os.environ["COMPANY_NAME"]
 SCHEMA_JIRA = f"{COMPANY}_JIRA_"
-STG_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_STAGING_NAME']}.duckdb")
+STG_DB = Path(DATA_DIR, f"{os.getenv('DUCKDB_STAGING_NAME')}.duckdb")
 
 T_SOURCE = "JIRA_ISSUES"
 T_TARGET = "RESOLVABLE_JIRA_USERS"

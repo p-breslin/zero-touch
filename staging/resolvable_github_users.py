@@ -25,7 +25,7 @@ setup_logging()
 log = logging.getLogger(__name__)
 
 T_TARGET = "RESOLVABLE_GITHUB_USERS"
-STG_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_STAGING_NAME']}.duckdb")
+STG_DB = Path(DATA_DIR, f"{os.getenv('DUCKDB_STAGING_NAME')}.duckdb")
 
 DDL = f"""
 CREATE TABLE IF NOT EXISTS {T_TARGET} (

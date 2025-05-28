@@ -29,8 +29,9 @@ log = logging.getLogger(__name__)
 COMPANY = os.environ["COMPANY_NAME"]
 SCHEMA_JIRA = f"{COMPANY}_JIRA_"
 
-STG_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_STAGING_NAME']}.duckdb")
-MAIN_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_NAME']}.duckdb")
+STG_DB = Path(DATA_DIR, f"{os.getenv('DUCKDB_STAGING_NAME')}.duckdb")
+MAIN_DB = Path(DATA_DIR, f"{os.getenv('DUCKDB_NAME')}.duckdb")
+
 
 T_COMMIT_KEYS = "GITHUB_COMMITS"
 T_PR_KEYS = "GITHUB_PRS"
