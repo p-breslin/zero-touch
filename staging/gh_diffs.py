@@ -47,11 +47,12 @@ def _commits_missing_files(conn) -> List[Tuple[str, str, str, str, str]]:
     q = f"""
         SELECT ORG, REPO, COMMIT_SHA, COMMITTER_ID, COMMITTER_NAME
         FROM "{T_COMMITS}" c
-        WHERE NOT EXISTS (
-            SELECT 1 FROM "{T_COMMIT_FILES}" f
-            WHERE f.ORG = c.ORG
-              AND f.REPO = c.REPO
-              AND f.COMMIT_SHA = c.COMMIT_SHA
+        WHERE c.EXTRACTED_JIRA_KEY IS NOT NULL
+          AND NOT EXISTS (
+              SELECT 1 FROM "{T_COMMIT_FILES}" f
+              WHERE f.ORG = c.ORG
+                AND f.REPO = c.REPO
+                AND f.COMMIT_SHA = c.COMMIT_SHA
         );
     """
     return conn.execute(q).fetchall()
