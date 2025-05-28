@@ -85,9 +85,9 @@ def resolve_users():
         conn.execute(DDL)
 
         jira = conn.execute(f"""
-            SELECT ACCOUNT_ID AS JIRA_ID,
-                   DISPLAY_NAME AS JIRA_DISPLAY_NAME,
-                   EMAIL AS JIRA_EMAIL
+            SELECT JIRA_ID AS JIRA_ID,
+                   JIRA_DISPLAY_NAME AS JIRA_DISPLAY_NAME,
+                   JIRA_EMAIL AS JIRA_EMAIL
             FROM {T_JIRA}
         """).fetchdf()
 
