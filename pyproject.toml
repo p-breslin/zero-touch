@@ -11,6 +11,7 @@ dependencies = [
     "dotenv>=0.9.9",
     "duckdb-engine>=0.17.0",
     "google-genai>=1.14.0",
+    "jira>=3.8.0",
     "openai>=1.77.0",
     "pygithub>=2.6.1",
     "snowflake>=1.4.0",
