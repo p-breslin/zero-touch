@@ -1,20 +1,16 @@
 from __future__ import annotations
-
 import os
-import base64
 import logging
 from pathlib import Path
 from github import Github
 from dotenv import load_dotenv
+from scripts.paths import DATA_DIR
 from collections import defaultdict
+from utils.helpers import db_manager
 from typing import Dict, List, Tuple, Set
-
+from utils.logging_setup import setup_logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from github.GithubException import GithubException, UnknownObjectException
-
-from scripts.paths import DATA_DIR
-from utils.logging_setup import setup_logging
-from utils.helpers import db_manager
 
 # Configuration ----------------------------------------------------------------
 load_dotenv()
@@ -28,8 +24,6 @@ T_COMMITS = "GITHUB_COMMITS"
 T_COMMIT_FILES = "GITHUB_DIFFS"
 
 MAX_WORKERS = 10
-_BLOB_CACHE: Dict[str, str] = {}
-
 _GH_TOKEN = os.getenv("GITHUB_PERSONAL_ACCESS_TOKEN")
 _G = Github(_GH_TOKEN, per_page=100, retry=3)
 
@@ -61,19 +55,6 @@ def _commits_missing_files(conn) -> List[Tuple[str, str, str, str, str]]:
         );
     """
     return conn.execute(q).fetchall()
-
-
-def _fetch_blob(repo_obj, blob_sha: str) -> str | None:
-    if blob_sha in _BLOB_CACHE:
-        return _BLOB_CACHE[blob_sha]
-    try:
-        blob = repo_obj.get_git_blob(blob_sha)
-        text = base64.b64decode(blob.content).decode(errors="replace")
-        _BLOB_CACHE[blob_sha] = text
-        return text
-    except GithubException as exc:
-        log.error("Blob %s error: %s", blob_sha, exc)
-        return None
 
 
 def _files_for_commit(repo_obj, sha: str) -> List[Tuple[str, str]]:
@@ -108,7 +89,7 @@ def _insert_file_rows(rows: List[Tuple[str, str, str, str, str, str, str]]):
             rows,
         )
         conn.commit()
-        log.info("Inserted %d code blobs into %s", len(rows), T_COMMIT_FILES)
+        log.info("Inserted %d code diffs into %s", len(rows), T_COMMIT_FILES)
 
 
 def main():
@@ -117,7 +98,7 @@ def main():
         todo = _commits_missing_files(conn)
 
     if not todo:
-        log.info("No new commits require file-blob staging.")
+        log.info("No new commits require diff staging.")
         return
 
     per_repo: Dict[Tuple[str, str], Set[Tuple[str, str, str]]] = defaultdict(set)
@@ -126,7 +107,7 @@ def main():
 
     staged_rows: List[Tuple[str, str, str, str, str, str, str]] = []
     log.info(
-        "Fetching code blobs for %d commits across %d repos …", len(todo), len(per_repo)
+        "Fetching code diffs for %d commits across %d repos …", len(todo), len(per_repo)
     )
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
@@ -164,9 +145,8 @@ def main():
 
     _insert_file_rows(staged_rows)
     log.info(
-        "Done staging %d blobs (%d unique blobs cached).",
+        "Done staging %d diffs",
         len(staged_rows),
-        len(_BLOB_CACHE),
     )
 
 
