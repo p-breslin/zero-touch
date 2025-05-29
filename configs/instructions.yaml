@@ -10,6 +10,7 @@ Issue_Key_Inference: >
     - The number part follows a hyphen directly after the project key and consists of one or more digits.
     - An underscore might sometimes be used instead of a hyphen (e.g., 'PROJ_123'); if you find such a pattern, normalize it by replacing the underscore with a hyphen (e.g., convert 'PROJ_123' to 'PROJ-123').
     - Keys are case-sensitive for the project key part (e.g., 'proj-123' is typically not a valid JIRA key; expect uppercase project keys like 'PROJ-123').
+    - There may be malformed entries e.g., 'Story/dns 15178'. In these cases, you must follow your prior instructions. E.g., in this example, the inference would conclude to 'DNS-15178'. Issues are equivalent to stories in JIRA.
   - If one or more valid JIRA issue keys are found, identify **ONLY THE FIRST ONE** that appears when reading the text sequentially.
   - Place this single, first-found JIRA key as a string in the 'key' field of the output structure.
   - If no valid JIRA issue key is found anywhere in the text, the 'key' field in the output structure should be `null` (or the field should be omitted from your JSON response).
