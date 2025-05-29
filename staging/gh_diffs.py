@@ -22,6 +22,7 @@ SRC_STG_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_STAGING_NAME']}.duckdb")
 
 T_COMMITS = "GITHUB_COMMITS"
 T_COMMIT_FILES = "GITHUB_DIFFS"
+T_USERS_GH = "CONSOLIDATED_GH_USERS"
 
 MAX_WORKERS = 10
 _GH_TOKEN = os.getenv("GITHUB_PERSONAL_ACCESS_TOKEN")
@@ -44,19 +45,33 @@ CREATE TABLE IF NOT EXISTS {T_COMMIT_FILES} (
 
 # Helpers ----------------------------------------------------------------------
 def _commits_missing_files(conn) -> List[Tuple[str, str, str, str, str]]:
+    """
+    Return (ORG, REPO, COMMIT_SHA, GITHUB_ID, GITHUB_DISPLAY_NAME) for every commit that has no diff staged yet, resolving the user through CONSOLIDATED_GH_USERS.
+    """
     q = f"""
-        SELECT ORG, REPO, COMMIT_SHA, COMMITTER_ID, COMMITTER_NAME
-        FROM "{T_COMMITS}" c
-        WHERE NOT EXISTS (
-            SELECT 1 FROM "{T_COMMIT_FILES}" f
-            WHERE f.ORG = c.ORG
-              AND f.REPO = c.REPO
-              AND f.COMMIT_SHA = c.COMMIT_SHA
-        );
+        SELECT
+            c.ORG,
+            c.REPO,
+            c.COMMIT_SHA,
+            u.GITHUB_ID,
+            u.GITHUB_DISPLAY_NAME
+        FROM "{T_COMMITS}"            c
+        LEFT JOIN "{T_USERS_GH}"      u
+               ON   u.GITHUB_ID    = c.COMMITTER_ID
+             OR  u.GITHUB_LOGIN  = c.COMMITTER_LOGIN
+        WHERE u.GITHUB_ID IS NOT NULL
+          AND NOT EXISTS (
+              SELECT 1
+              FROM   "{T_COMMIT_FILES}" f
+              WHERE  f.ORG        = c.ORG
+                AND  f.REPO       = c.REPO
+                AND  f.COMMIT_SHA = c.COMMIT_SHA
+          );
     """
     return conn.execute(q).fetchall()
 
 
+# GitHub API calls -------------------------------------------------------------
 def _files_for_commit(repo_obj, sha: str) -> List[Tuple[str, str]]:
     try:
         commit = repo_obj.get_commit(sha)
@@ -77,7 +92,6 @@ def _files_for_commit(repo_obj, sha: str) -> List[Tuple[str, str]]:
     return out
 
 
-# Core logic -------------------------------------------------------------------
 def _insert_file_rows(rows: List[Tuple[str, str, str, str, str, str, str]]):
     if not rows:
         return
@@ -92,6 +106,7 @@ def _insert_file_rows(rows: List[Tuple[str, str, str, str, str, str, str]]):
         log.info("Inserted %d code diffs into %s", len(rows), T_COMMIT_FILES)
 
 
+# Core logic -------------------------------------------------------------------
 def main():
     with db_manager(SRC_STG_DB) as conn:
         conn.execute(DDL_COMMIT_FILES)
@@ -102,12 +117,12 @@ def main():
         return
 
     per_repo: Dict[Tuple[str, str], Set[Tuple[str, str, str]]] = defaultdict(set)
-    for org, repo, sha, committer_id, committer_name in todo:
-        per_repo[(org, repo)].add((sha, committer_id, committer_name))
+    for org, repo, sha, gh_id, gh_name in todo:
+        per_repo[(org, repo)].add((sha, gh_id, gh_name))
 
     staged_rows: List[Tuple[str, str, str, str, str, str, str]] = []
     log.info(
-        "Fetching code diffs for %d commits across %d repos …", len(todo), len(per_repo)
+        "Fetching code diffs for %d commits across %d repos", len(todo), len(per_repo)
     )
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
@@ -123,23 +138,20 @@ def main():
                 log.error("Repo fetch error %s/%s: %s", org, repo, exc)
                 continue
 
-            for sha, committer_id, committer_name in commit_infos:
+            for sha, gh_id, gh_name in commit_infos:
                 futures[pool.submit(_files_for_commit, repo_obj, sha)] = (
                     org,
                     repo,
                     sha,
-                    committer_id,
-                    committer_name,
+                    gh_id,
+                    gh_name,
                 )
 
         for fut in as_completed(futures):
-            org, repo, sha, committer_id, committer_name = futures[fut]
+            org, repo, sha, gh_id, gh_name = futures[fut]
             try:
                 for path, code in fut.result():
-                    staged_rows.append(
-                        (org, repo, sha, committer_id, committer_name, path, code)
-                    )
-                    log.info("Appended code from repo: %s", repo)
+                    staged_rows.append((org, repo, sha, gh_id, gh_name, path, code))
             except Exception as exc:
                 log.error("Worker error for %s/%s@%s: %s", org, repo, sha, exc)
 
