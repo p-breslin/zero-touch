@@ -45,6 +45,7 @@ T_TARGET = "GITHUB_PRS"
 COLS = (
     "INTERNAL_ID",
     "NUMBER",
+    "COMMIT_SHA",
     "ORG",
     "REPO",
     "USER_ID",
@@ -64,6 +65,7 @@ DDL = f"""
 CREATE TABLE IF NOT EXISTS {T_TARGET} (
     INTERNAL_ID  TEXT,
     NUMBER       INTEGER,
+    COMMIT_SHA   TEXT,
     ORG          TEXT,
     REPO         TEXT,
     USER_ID      TEXT,
@@ -129,7 +131,7 @@ def _pr_rows_for_shas(src: duckdb.DuckDBPyConnection, shas: List[str]) -> List[T
     src.executemany("INSERT INTO tmp_sha VALUES (?);", [(s,) for s in shas])
 
     q = f"""
-      SELECT pr."ID","NUMBER", pr."ORG", pr."REPO", pr."USER","ASSIGNEE",
+      SELECT pr."ID","NUMBER", pc."SHA", pr."ORG", pr."REPO", pr."USER","ASSIGNEE",
              pr."ASSIGNEES","REQUESTED_REVIEWERS",
              pr."TITLE","BODY",
              pr."CREATED_AT","UPDATED_AT","MERGED_AT","CLOSED_AT","STATE"
@@ -186,6 +188,7 @@ def _build_records() -> List[Dict[str, Any]]:
         for (
             pr_id,
             num,
+            sha,
             org,
             repo,
             author,
@@ -203,6 +206,7 @@ def _build_records() -> List[Dict[str, Any]]:
             base = dict(
                 INTERNAL_ID=str(pr_id),
                 NUMBER=num,
+                COMMIT_SHA=sha,
                 ORG=org,
                 REPO=repo,
                 TITLE=title,
