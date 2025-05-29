@@ -5,7 +5,7 @@ Steps
 --------
 1. Collect distinct keys from both tables on the staging DB
 2. Pull full issue blobs from the main JIRA DB
-3. Enrich with account-email via JIRA_USER_PROFILES (staging DB)
+3. Enrich with account-email via JIRA_ACTIVE_USERS (staging DB)
 4. Upsert into JIRA_ISSUES
 """
 
