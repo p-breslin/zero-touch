@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS {T_COMMIT_FILES} (
     ORG             TEXT,
     REPO            TEXT,
     COMMIT_SHA      TEXT,
+    COMMIT_TIMESTAMP TIMESTAMP,
     COMMITTER_ID    TEXT,
     COMMITTER_NAME  TEXT,
     FILE_PATH       TEXT,
@@ -46,27 +47,27 @@ CREATE TABLE IF NOT EXISTS {T_COMMIT_FILES} (
 # Helpers ----------------------------------------------------------------------
 def _commits_missing_files(conn) -> List[Tuple[str, str, str, str, str]]:
     """
-    Return (ORG, REPO, COMMIT_SHA, GITHUB_ID, GITHUB_DISPLAY_NAME) for every commit that has no diff staged yet, resolving the user through CONSOLIDATED_GH_USERS.
+    Return (ORG, REPO, COMMIT_SHA, COMMIT_TIMESTAMP, GITHUB_ID, GITHUB_DISPLAY_NAME) for every commit that has no diff staged yet, resolving the user through CONSOLIDATED_GH_USERS.
     """
     q = f"""
         SELECT
             c.ORG,
             c.REPO,
             c.COMMIT_SHA,
+            c.COMMIT_TIMESTAMP,
             u.GITHUB_ID,
             u.GITHUB_DISPLAY_NAME
-        FROM "{T_COMMITS}"            c
-        LEFT JOIN "{T_USERS_GH}"      u
-               ON   u.GITHUB_ID    = c.COMMITTER_ID
-             OR  u.GITHUB_LOGIN  = c.COMMITTER_LOGIN
+        FROM "{T_COMMITS}" c
+        LEFT JOIN "{T_USERS_GH}" u
+        ON u.GITHUB_ID   = c.COMMITTER_ID
+        OR u.GITHUB_LOGIN = c.COMMITTER_LOGIN
         WHERE u.GITHUB_ID IS NOT NULL
-          AND NOT EXISTS (
-              SELECT 1
-              FROM   "{T_COMMIT_FILES}" f
-              WHERE  f.ORG        = c.ORG
-                AND  f.REPO       = c.REPO
-                AND  f.COMMIT_SHA = c.COMMIT_SHA
-          );
+        AND NOT EXISTS (
+                SELECT 1 FROM "{T_COMMIT_FILES}" f
+                WHERE f.ORG = c.ORG
+                AND f.REPO = c.REPO
+                AND f.COMMIT_SHA = c.COMMIT_SHA
+        );
     """
     return conn.execute(q).fetchall()
 
@@ -92,13 +93,13 @@ def _files_for_commit(repo_obj, sha: str) -> List[Tuple[str, str]]:
     return out
 
 
-def _insert_file_rows(rows: List[Tuple[str, str, str, str, str, str, str]]):
+def _insert_file_rows(rows: List[Tuple[str, str, str, str, str, str, str, str]]):
     if not rows:
         return
     with db_manager(SRC_STG_DB) as conn:
         conn.execute(DDL_COMMIT_FILES)
         conn.executemany(
-            f'INSERT INTO "{T_COMMIT_FILES}" VALUES (?,?,?,?,?,?,?)'
+            f'INSERT INTO "{T_COMMIT_FILES}" VALUES (?,?,?,?,?,?,?, ?)'
             " ON CONFLICT DO NOTHING;",
             rows,
         )
@@ -116,11 +117,11 @@ def main():
         log.info("No new commits require diff staging.")
         return
 
-    per_repo: Dict[Tuple[str, str], Set[Tuple[str, str, str]]] = defaultdict(set)
-    for org, repo, sha, gh_id, gh_name in todo:
-        per_repo[(org, repo)].add((sha, gh_id, gh_name))
+    per_repo: Dict[Tuple[str, str], Set[Tuple[str, str, str, str]]] = defaultdict(set)
+    for org, repo, sha, ts, gh_id, gh_name in todo:
+        per_repo[(org, repo)].add((sha, ts, gh_id, gh_name))
 
-    staged_rows: List[Tuple[str, str, str, str, str, str, str]] = []
+    staged_rows: List[Tuple[str, str, str, str, str, str, str, str]] = []
     log.info(
         "Fetching code diffs for %d commits across %d repos", len(todo), len(per_repo)
     )
@@ -138,28 +139,26 @@ def main():
                 log.error("Repo fetch error %s/%s: %s", org, repo, exc)
                 continue
 
-            for sha, gh_id, gh_name in commit_infos:
+            for sha, ts, gh_id, gh_name in commit_infos:
                 futures[pool.submit(_files_for_commit, repo_obj, sha)] = (
                     org,
                     repo,
                     sha,
+                    ts,
                     gh_id,
                     gh_name,
                 )
 
         for fut in as_completed(futures):
-            org, repo, sha, gh_id, gh_name = futures[fut]
+            org, repo, sha, ts, gh_id, gh_name = futures[fut]
             try:
                 for path, code in fut.result():
-                    staged_rows.append((org, repo, sha, gh_id, gh_name, path, code))
+                    staged_rows.append((org, repo, sha, ts, gh_id, gh_name, path, code))
             except Exception as exc:
                 log.error("Worker error for %s/%s@%s: %s", org, repo, sha, exc)
 
     _insert_file_rows(staged_rows)
-    log.info(
-        "Done staging %d diffs",
-        len(staged_rows),
-    )
+    log.info("Done staging %d diffs", len(staged_rows))
 
 
 if __name__ == "__main__":
