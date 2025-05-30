@@ -2,7 +2,7 @@
 Populates GITHUB_COMMITS (staging DB) with all commit records from the last 90 days. Purpose is to prepare them for JIRA issue-key extraction and subsequent analysis.
 
 Steps
---------
+-----
 1. Read all rows from COMMITS (source DB) whose COMMIT_TIMESTAMP >= cutoff.
 2. Flatten + insert into GITHUB_COMMITS (ON CONFLICT DO NOTHING)
 """

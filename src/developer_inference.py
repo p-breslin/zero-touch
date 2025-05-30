@@ -4,14 +4,29 @@ import asyncio
 import logging
 from pathlib import Path
 from dotenv import load_dotenv
-from typing import List, Tuple, Optional
 from agno.agent import RunResponse
+from typing import List, Tuple, Optional
 
 from models import CommitterInfo
 from scripts.paths import DATA_DIR
 from utils.helpers import db_manager
 from agents.agent_builder import build_agent
 from utils.logging_setup import setup_logging
+
+"""
+Infers developer information from code contributions using a language agent.
+
+Description
+-----------
+Extracts developer role, experience, skills, and justification by analyzing commit code using AI agents. Limits the number of processed entries and controls concurrency via a semaphore.
+
+    1. Loads committer IDs, names, and aggregated code diffs for inference.
+    2. Invokes an Agent to analyze truncated code snippets asynchronously.
+    3. Extracts structured insights as a CommitterInfo object.
+    4. Inserts the inferred attributes into the DEVELOPER_INFERENCE table, avoiding duplicates.
+
+Code is truncated to a maximum character length to stay within token limits.
+"""
 
 # Configuration ----------------------------------------------------------------
 load_dotenv()

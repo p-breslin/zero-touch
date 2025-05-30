@@ -17,7 +17,7 @@ STG_DB = Path(DATA_DIR, f"{os.getenv('DUCKDB_STAGING_NAME')}.duckdb")
 T_USERS = "JIRA_ACTIVE_USERS"
 T_STORIES = "JIRA_STORIES"
 T_TARGET = "JIRA_USER_STORIES"
-
+T_GITHUB = "JIRA_GITHUB"
 
 # SQL block --------------------------------------------------------------------
 DDL = f"""
@@ -27,29 +27,37 @@ WITH links AS (
         u.JIRA_ID,
         u.JIRA_DISPLAY_NAME,
         u.JIRA_EMAIL,
-        s.ID        AS STORY_ID,
-        s.KEY       AS STORY_KEY,
+
+        s.ID         AS STORY_ID,
+        s.KEY        AS STORY_KEY,
         s.EPIC_ID,
         s.EPIC_KEY,
         s.PROJECT_KEY,
-        s.PROJECT_NAME
+        s.PROJECT_NAME,
+
+        g.REPO
     FROM {T_USERS}   u
     JOIN {T_STORIES} s
-      ON   u.JIRA_ID = s.REPORTER_ID
-       OR  u.JIRA_ID = s.CREATOR_ID
-       OR  u.JIRA_ID = s.ASSIGNEE_ID
+      ON u.JIRA_ID = s.REPORTER_ID
+      OR u.JIRA_ID = s.CREATOR_ID
+      OR u.JIRA_ID = s.ASSIGNEE_ID
+
+    LEFT JOIN {T_GITHUB} g
+      ON (g.STORY_ID  = s.ID  OR g.STORY_KEY = s.KEY)
 ),
 aggregated AS (
     SELECT
         JIRA_ID,
-        MAX(JIRA_DISPLAY_NAME)          AS JIRA_DISPLAY_NAME,
-        MAX(JIRA_EMAIL)                 AS JIRA_EMAIL,
-        ARRAY_AGG(DISTINCT STORY_ID)    AS STORY_IDS,
-        ARRAY_AGG(DISTINCT STORY_KEY)   AS STORY_KEYS,
-        ARRAY_AGG(DISTINCT EPIC_ID)     AS EPIC_IDS,
-        ARRAY_AGG(DISTINCT EPIC_KEY)    AS EPIC_KEYS,
-        ARRAY_AGG(DISTINCT PROJECT_KEY) AS PROJECT_KEYS,
-        ARRAY_AGG(DISTINCT PROJECT_NAME)AS PROJECT_NAMES
+        MAX(JIRA_DISPLAY_NAME)           AS JIRA_DISPLAY_NAME,
+        MAX(JIRA_EMAIL)                  AS JIRA_EMAIL,
+
+        ARRAY_AGG(DISTINCT STORY_ID)     AS STORY_IDS,
+        ARRAY_AGG(DISTINCT STORY_KEY)    AS STORY_KEYS,
+        ARRAY_AGG(DISTINCT EPIC_ID)      AS EPIC_IDS,
+        ARRAY_AGG(DISTINCT EPIC_KEY)     AS EPIC_KEYS,
+        ARRAY_AGG(DISTINCT PROJECT_KEY)  AS PROJECT_KEYS,
+        ARRAY_AGG(DISTINCT PROJECT_NAME) AS PROJECT_NAMES,
+        ARRAY_AGG(DISTINCT REPO)         AS REPOS
     FROM links
     GROUP BY JIRA_ID
 )

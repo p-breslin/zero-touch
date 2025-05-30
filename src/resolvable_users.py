@@ -11,6 +11,20 @@ from dotenv import load_dotenv
 from scripts.paths import DATA_DIR
 from utils.logging_setup import setup_logging
 
+"""
+Resolves users Between JIRA and GitHub sources using multi-tiered matching.
+
+Description
+-----------
+Links user identities between JIRA and GitHub datasets and writes resolved matches to a table. Performs a series of progressively looser matching passes across user data from the two systems using different strategies to maximize confident matches:
+
+    1. Email match: matches users based on exact normalized email addresses.
+    2. Name token overlap: uses Jaccard similarity on tokenized display names and GitHub logins.
+    3. Pattern match: generates username patterns from JIRA display names and checks against GitHub logins.
+    4. Fuzzy string match: applies fuzzy matching (token set ratio) between cleaned display names and logins.
+
+Each match is scored and tagged with the method and confidence score. Unmatched records from both sources are also recorded. Matching results are written to a target table named RESOLVABLE_USERS.
+"""
 
 # Configuration ----------------------------------------------------------------
 load_dotenv()
@@ -19,7 +33,7 @@ log = logging.getLogger(__name__)
 
 DB_PATH = Path(DATA_DIR, f"{os.getenv('DUCKDB_STAGING_NAME')}.duckdb")
 T_JIRA = "JIRA_ACTIVE_USERS"
-T_GH = "RESOLVABLE_GITHUB_USERS"
+T_GH = "CONSOLIDATED_GH_USERS"
 T_TARGET = "RESOLVABLE_USERS"
 
 DDL = f"""
@@ -65,9 +79,9 @@ def generate_username_patterns(name: str) -> set[str]:
     parts = [re.sub(r"[^a-z]", "", p.lower()) for p in name.split() if p]
     patterns = set()
     if parts:
-        patterns.add(parts[0])  # First name
+        patterns.add(parts[0])
         if len(parts) > 1:
-            patterns.add(parts[-1])  # Last name
+            patterns.add(parts[-1])
             patterns.add(parts[0] + parts[-1])
             patterns.add(parts[-1] + parts[0])
             patterns.add(parts[0][0] + parts[-1])
@@ -85,13 +99,12 @@ def resolve_users():
         conn.execute(DDL)
 
         jira = conn.execute(f"""
-            SELECT JIRA_ID AS JIRA_ID,
-                   JIRA_DISPLAY_NAME AS JIRA_DISPLAY_NAME,
-                   JIRA_EMAIL AS JIRA_EMAIL
-            FROM {T_JIRA}
+            SELECT JIRA_ID, JIRA_DISPLAY_NAME, JIRA_EMAIL FROM {T_JIRA}
         """).fetchdf()
 
-        gh = conn.execute(f"SELECT * FROM {T_GH}").fetchdf()
+        gh = conn.execute(f"""
+            SELECT GITHUB_ID, GITHUB_DISPLAY_NAME, GITHUB_LOGIN, GITHUB_EMAIL FROM {T_GH}
+        """).fetchdf()
 
     jira["JIRA_EMAIL_NORM"] = jira["JIRA_EMAIL"].apply(normalize_email)
     gh["GH_EMAIL_NORM"] = gh["GITHUB_EMAIL"].apply(normalize_email)
@@ -109,7 +122,19 @@ def resolve_users():
         ]
         if not matches.empty:
             g = matches.iloc[0]
-            results.append((*j[:3], *g[:4], "TIER_1_EMAIL", 1.0))
+            results.append(
+                (
+                    j["JIRA_ID"],
+                    j["JIRA_DISPLAY_NAME"],
+                    j["JIRA_EMAIL"],
+                    g["GITHUB_ID"],
+                    g["GITHUB_DISPLAY_NAME"],
+                    g["GITHUB_EMAIL"],
+                    g["GITHUB_LOGIN"],
+                    "TIER_1_EMAIL",
+                    1.0,
+                )
+            )
             matched_jira.add(j_idx)
             matched_gh.add(g.name)
 
@@ -124,7 +149,19 @@ def resolve_users():
             g_tokens = tokenize(g["GITHUB_DISPLAY_NAME"]) | tokenize(g["GITHUB_LOGIN"])
             sim = jaccard_similarity(j_tokens, g_tokens)
             if sim >= 0.5:
-                results.append((*j[:3], *g[:4], "TIER_2_JACCARD", round(sim, 2)))
+                results.append(
+                    (
+                        j["JIRA_ID"],
+                        j["JIRA_DISPLAY_NAME"],
+                        j["JIRA_EMAIL"],
+                        g["GITHUB_ID"],
+                        g["GITHUB_DISPLAY_NAME"],
+                        g["GITHUB_EMAIL"],
+                        g["GITHUB_LOGIN"],
+                        "TIER_2_JACCARD",
+                        round(sim, 2),
+                    )
+                )
                 matched_jira.add(j_idx)
                 matched_gh.add(g_idx)
                 break
@@ -138,12 +175,23 @@ def resolve_users():
             if g_idx in matched_gh:
                 continue
             login = (g["GITHUB_LOGIN"] or "").lower()
-
             for p in patterns:
                 if len(p) < 3:
-                    continue  # Skip too-short patterns that cause false positives
+                    continue
                 if login == p or login.startswith(p) or login.endswith(p):
-                    results.append((*j[:3], *g[:4], "TIER_2.5_NAME_PATTERN", 0.75))
+                    results.append(
+                        (
+                            j["JIRA_ID"],
+                            j["JIRA_DISPLAY_NAME"],
+                            j["JIRA_EMAIL"],
+                            g["GITHUB_ID"],
+                            g["GITHUB_DISPLAY_NAME"],
+                            g["GITHUB_EMAIL"],
+                            g["GITHUB_LOGIN"],
+                            "TIER_2.5_NAME_PATTERN",
+                            0.75,
+                        )
+                    )
                     matched_jira.add(j_idx)
                     matched_gh.add(g_idx)
                     break
@@ -172,18 +220,54 @@ def resolve_users():
                 best_match = (g_idx, g)
         if best_match and best_score >= 85:
             g_idx, g = best_match
-            results.append((*j[:3], *g[:4], "TIER_3_FUZZY", round(best_score / 100, 2)))
+            results.append(
+                (
+                    j["JIRA_ID"],
+                    j["JIRA_DISPLAY_NAME"],
+                    j["JIRA_EMAIL"],
+                    g["GITHUB_ID"],
+                    g["GITHUB_DISPLAY_NAME"],
+                    g["GITHUB_EMAIL"],
+                    g["GITHUB_LOGIN"],
+                    "TIER_3_FUZZY",
+                    round(best_score / 100, 2),
+                )
+            )
             matched_jira.add(j_idx)
             matched_gh.add(g_idx)
 
     # Unmatched Records
     for j_idx, j in jira.iterrows():
         if j_idx not in matched_jira:
-            results.append((*j[:3], None, None, None, None, "UNMATCHED_JIRA", None))
+            results.append(
+                (
+                    j["JIRA_ID"],
+                    j["JIRA_DISPLAY_NAME"],
+                    j["JIRA_EMAIL"],
+                    None,
+                    None,
+                    None,
+                    None,
+                    "UNMATCHED_JIRA",
+                    None,
+                )
+            )
 
     for g_idx, g in gh.iterrows():
         if g_idx not in matched_gh:
-            results.append((None, None, None, *g[:4], "UNMATCHED_GITHUB", None))
+            results.append(
+                (
+                    None,
+                    None,
+                    None,
+                    g["GITHUB_ID"],
+                    g["GITHUB_DISPLAY_NAME"],
+                    g["GITHUB_EMAIL"],
+                    g["GITHUB_LOGIN"],
+                    "UNMATCHED_GITHUB",
+                    None,
+                )
+            )
 
     # Write to database
     columns = [
@@ -198,7 +282,7 @@ def resolve_users():
         "MATCH_CONFIDENCE",
     ]
     df = pd.DataFrame(results, columns=columns)
-    df = df[df["GITHUB_ID"].notnull()]  # Keep only matched GitHub entries
+    df = df[df["GITHUB_ID"].notnull()]
 
     with duckdb.connect(DB_PATH) as conn:
         conn.execute(f"DELETE FROM {T_TARGET}")

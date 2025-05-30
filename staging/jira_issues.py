@@ -2,7 +2,7 @@
 Stage JIRA_ISSUES with full details for every JIRA key seen in GITHUB_COMMITS or GITHUB_PRS.
 
 Steps
---------
+-----
 1. Collect distinct keys from both tables on the staging DB
 2. Pull full issue blobs from the main JIRA DB
 3. Enrich with account-email via JIRA_ACTIVE_USERS (staging DB)
