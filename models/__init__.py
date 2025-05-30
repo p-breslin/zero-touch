@@ -2,9 +2,8 @@ from .inference_models import (
     IssueKey,
     RepoLabel,
     CommitterInfo,
-    ConsolidatedEntity,
-    AmbiguousLink,
-    IdentityInference,
+    PreprocessedDiffOutput,
+    DeveloperInfo,
 )
 
 
@@ -12,7 +11,6 @@ __all__ = [
     "IssueKey",
     "RepoLabel",
     "CommitterInfo",
-    "ConsolidatedEntity",
-    "AmbiguousLink",
-    "IdentityInference",
+    "PreprocessedDiffOutput",
+    "DeveloperInfo",
 ]

@@ -13,9 +13,8 @@ from models import (
     IssueKey,
     RepoLabel,
     CommitterInfo,
-    ConsolidatedEntity,
-    AmbiguousLink,
-    IdentityInference,
+    PreprocessedDiffOutput,
+    DeveloperInfo,
 )
 
 log = logging.getLogger(__name__)
@@ -23,9 +22,8 @@ MAPPINGS = {
     "IssueKey": IssueKey,
     "RepoLabel": RepoLabel,
     "CommitterInfo": CommitterInfo,
-    "ConsolidatedEntity": ConsolidatedEntity,
-    "AmbiguousLink": AmbiguousLink,
-    "IdentityInference": IdentityInference,
+    "PreprocessedDiffOutput": PreprocessedDiffOutput,
+    "DeveloperInfo": DeveloperInfo,
 }
 
 

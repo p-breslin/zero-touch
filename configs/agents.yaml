@@ -43,9 +43,34 @@ Committer_Info_Inference:
     primary functional role and identify a list of their key technical skills
     based on the provided code.
   provider: "openai"
-  model_id: "gpt-4o"
+  model_id: "gpt-4.1"
   prompt_key: "Committer_Info_Inference"
   response_model: "CommitterInfo"
   temperature: 0.7
   debug_mode: false
+
 # ------------------------------------------------------------------------------
+
+Diff_Preprocessor:
+  description: >
+    You are an AI assistant specialized in parsing and structuring raw aggregated git diffs. The input will be a single string containing multiple demarcated code changes, each with metadata like commit SHA, timestamp, repository, and file path. Your task is to process each individual code change (typically a diff for one file within one commit) and extract key information, then structure it into a predefined JSON format. You will output a list of these structured objects, where each object represents a single commit's impact on one or more files.
+  provider: "openai"
+  model_id: "gpt-4.1"
+  prompt_key: "Diff_Preprocessor"
+  response_model: "PreprocessedDiffOutput"
+  thinking: true
+  temperature: 0.2
+  debug_mode: false
+
+# ------------------------------------------------------------------------------
+
+Developer_Inference:
+  description: >
+    An AI assistant that analyzes pre-processed, structured summaries of a developer'sccode contributions (commits and file changes) to infer their primary functional role,cexperience level, and key technical skills, providing a detailed justification.
+  provider: "openai"
+  model_id: "gpt-4.1"
+  prompt_key: "Developer_Inference"
+  response_model: "DeveloperInfo"
+  thinking: true
+  temperature: 0.7
+  debug_mode: false
