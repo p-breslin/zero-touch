@@ -14,7 +14,7 @@ from agents.agent_builder import build_agent
 from utils.logging_setup import setup_logging
 
 """
-Infers developer information from code contributions using a language agent.
+Infers developer information from code contributions using an AI agent.
 
 Description
 -----------
