@@ -68,9 +68,9 @@ Developer_Inference:
   description: >
     An AI assistant that analyzes pre-processed, structured summaries of a developer'sccode contributions (commits and file changes) to infer their primary functional role,cexperience level, and key technical skills, providing a detailed justification.
   provider: "openai"
-  model_id: "gpt-4.1"
+  model_id: "gpt-4o"
   prompt_key: "Developer_Inference"
   response_model: "DeveloperInfo"
   thinking: true
-  temperature: 0.7
+  temperature: 0.2
   debug_mode: false
