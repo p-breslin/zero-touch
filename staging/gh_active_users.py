@@ -44,9 +44,9 @@ CREATE TABLE IF NOT EXISTS {T_USERS} (
     DISPLAY_NAME TEXT,
     EMAIL TEXT,
     LOGIN TEXT,
-    ALIASES_DISPLAY_NAME TEXT,
-    ALIASES_EMAIL TEXT,
-    ALIASES_LOGIN TEXT
+    ALIAS_DISPLAY_NAME TEXT,
+    ALIAS_EMAIL TEXT,
+    ALIAS_LOGIN TEXT
 );
 """
 
@@ -130,7 +130,7 @@ def _insert(records: List[Tuple[str, str, str, str, str, str, str]]):
             f"""
             INSERT INTO {T_USERS} (
                 ID, DISPLAY_NAME, EMAIL, LOGIN,
-                ALIASES_DISPLAY_NAME, ALIASES_EMAIL, ALIASES_LOGIN
+                ALIAS_DISPLAY_NAME, ALIAS_EMAIL, ALIAS_LOGIN
             )
             VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (ID) DO NOTHING;
