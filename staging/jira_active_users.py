@@ -21,9 +21,9 @@ TABLE_NAME = "JIRA_ACTIVE_USERS"
 # SQL block --------------------------------------------------------------------
 DDL = f"""
 CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
-    JIRA_ID             TEXT,
-    JIRA_DISPLAY_NAME   TEXT,
-    JIRA_EMAIL          TEXT
+    ID             TEXT,
+    DISPLAY_NAME   TEXT,
+    EMAIL          TEXT
 );
 """
 
@@ -31,9 +31,9 @@ CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
 df = pd.read_csv(CSV_PATH)
 df = df[["User id", "User name", "email"]].rename(
     columns={
-        "User id": "JIRA_ID",
-        "User name": "JIRA_DISPLAY_NAME",
-        "email": "JIRA_EMAIL",
+        "User id": "ID",
+        "User name": "DISPLAY_NAME",
+        "email": "EMAIL",
     }
 )
 
