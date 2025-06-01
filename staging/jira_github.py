@@ -8,6 +8,19 @@ from utils.helpers import db_manager
 from utils.logging_setup import setup_logging
 from datetime import datetime, timedelta, timezone
 
+"""
+Stages Jira stories and links them to GitHub activity for cross-platform analysis.
+
+Description
+-----------
+Extracts recent Jira stories and matches them to GitHub commits and pull requests using embedded Jira keys. Populates two staging tables: JIRA_STORIES for raw story metadata, and JIRA_GITHUB for enriched, joined records.
+
+    1. Loads stories updated within the last 90 days from the ISSUES_SUMMARY_STATS source table.
+    2. Writes structured story data to the JIRA_STORIES table, skipping duplicates.
+    3. Joins stories to GitHub commits and PRs based on EXTRACTED_JIRA_KEY fields.
+    4. Writes joined records to the JIRA_GITHUB table with contributor metadata from both systems.
+"""
+
 
 # Configuration ----------------------------------------------------------------
 load_dotenv()

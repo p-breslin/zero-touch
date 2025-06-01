@@ -7,13 +7,28 @@ from scripts.paths import DATA_DIR
 from utils.helpers import db_manager
 from utils.logging_setup import setup_logging
 
+"""
+Creates a per-developer summary table aggregating identity, role, and project activity.
+
+Description
+-----------
+Builds the PERSON_INFORMATION table by joining developer inference results with interaction history. Combines identity metadata from interactions with structured role and skill information, and aggregates all related story, epic, project, and repository references.
+
+    1. Aggregates all distinct artefacts (story, epic, repo, etc.) touched by each GitHub user.
+    2. Extracts display name, email, and login from interaction records for identity enrichment.
+    3. Merges the aggregated artefacts and identity with developer inference outputs (role, experience level, skills).
+    4. Ensures all array fields are initialized as empty arrays if no data is present.
+
+Each developer is represented by a single row keyed by GitHub ID.
+"""
+
 # Configuration ----------------------------------------------------------------
 load_dotenv()
 setup_logging()
 log = logging.getLogger(__name__)
 
 STG_DB = Path(DATA_DIR, f"{os.getenv('DUCKDB_STAGING_NAME')}.duckdb")
-T_INFERENCE = "DEVELOPER_INFERENCE"
+T_INFERENCE = "DEVELOPER_PROFILE_INFERENCE"
 T_INTERACTIONS = "ALL_INTERACTIONS"
 T_PERSON = "PERSON_INFORMATION"
 

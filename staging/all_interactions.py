@@ -7,6 +7,21 @@ from scripts.paths import DATA_DIR
 from utils.helpers import db_manager
 from utils.logging_setup import setup_logging
 
+"""
+Constructs a unified table of all Jira and GitHub participants across linked stories.
+
+Description
+-----------
+Generates the ALL_INTERACTIONS table by extracting role-based participants from Jira and GitHub and joining them against resolved identities. Normalizes contributor roles across platforms to support downstream analysis of collaboration patterns and user resolution status.
+
+    1. Extracts contributors from JIRA_GITHUB by role: reporter, creator, assignee, author, committer, and PR user.
+    2. Assigns each contributor a ROLE_TYPE and links them to story, epic, project, and repo context.
+    3. Joins the result with RESOLVABLE_USERS to include resolved identities where available.
+    4. Tags each row as RESOLVED or UNRESOLVED depending on whether identity resolution succeeded.
+
+Removes duplicates by selecting distinct entries.
+"""
+
 
 # Configuration ----------------------------------------------------------------
 load_dotenv()
