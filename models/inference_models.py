@@ -6,74 +6,88 @@ class IssueKey(BaseModel):
     key: Optional[str] = None
 
 
-class RepoLabel(BaseModel):
-    label: Optional[str] = Field(
-        description="A concise, general functional label for the repository (max two words)."
+class GeneratedCommitSummary(BaseModel):
+    """Output model after analyzing a single commit diff."""
+
+    summary: str = Field(
+        ...,
+        description="One- to two-sentence summary describing the purpose and scope of the changes in the commit.",
+    )
+
+    key_changes: List[str] = Field(
+        ...,
+        description="List of important changes or actions taken in the commit, ideally 2-5 bullet points.",
+    )
+
+    langs: List[str] = Field(
+        ...,
+        description="Languages used in the commit, e.g., 'python', 'typescript', 'java'.",
+    )
+
+    frameworks: List[str] = Field(
+        ...,
+        description="Frameworks or major libraries used, e.g., 'php', 'react', 'django', 'fastapi', 'vue'.",
     )
 
 
-class CommitterInfo(BaseModel):
-    analysis: str = Field(
-        description="A brief summary of observations from the code changes, including types of files modified, nature of changes, and notable patterns."
-    )
-    role: Literal[
-        "Front End Developer",
-        "Back End Developer",
-        "AI Engineer",
-        "DevOps Engineer",
-        "Inconclusive",
-    ] = Field(
-        description="The determined primary role of the developer based on code changes."
-    )
-    experience_level: Literal["Junior", "Mid-level", "Senior", "Inconclusive"] = Field(
-        description="The determined experience level of the developer based on complexity and scope of changes."
-    )
-    skills: List[str] = Field(
-        default_factory=list,
-        description="A list of identified technologies, languages, frameworks, or tools demonstrated.",
-    )
-    justification: str = Field(
-        description="Detailed explanation for the conclusions on role, experience level, and skills, referencing specific code change examples."
-    )
-    notes: Optional[str] = Field(
-        default=None,
-        description="Optional field for any additional notes, or to explain why a determination was inconclusive if not covered in justification.",
+class PreprocessedCommitSummary(BaseModel):
+    """Final commit-level summary. Combines agent results with metadata."""
+
+    commit_message: str = Field(
+        ..., description="The commit message as written by the developer."
     )
 
-
-class FileChangeDetail(BaseModel):
-    file_path: str = Field(description="The full path of the modified file.")
-    file_type_inference: str = Field(
-        description="Inferred type or purpose of the file (e.g., 'Frontend UI Component', 'Backend API Endpoint', 'DevOps Script', 'Documentation', 'Test File', 'Configuration')."
-    )
-    key_changes_summary: str = Field(
-        description="A brief 1-2 sentence summary of what changed in this specific file diff."
-    )
-    technologies_identified: List[str] = Field(
-        default_factory=list,
-        description="A list of specific languages, frameworks, or tools evident from the changes in this file.",
+    summary: str = Field(
+        ...,
+        description="Concise agent-generated description of what the commit accomplished.",
     )
 
+    key_changes: List[str] = Field(
+        ..., description="Bullet points summarizing major changes in the commit."
+    )
 
-class StructuredContribution(BaseModel):
-    commit_hash: str = Field(description="The commit SHA associated with this change.")
-    timestamp: str = Field(description="The timestamp of the commit.")
-    repo_name: str = Field(description="The name of the repository.")
-    files_changed: List[FileChangeDetail] = Field(
-        description="A list of details for each file changed within this commit."
+    langs: List[str] = Field(
+        ..., description="Languages detected in the files modified by this commit."
     )
-    overall_commit_summary: Optional[str] = Field(
-        default=None,
-        description="A high-level summary of what this entire commit achieved, if discernible from multiple file changes. Can be similar to a good commit message.",
+
+    frameworks: List[str] = Field(
+        ...,
+        description="Relevant frameworks or libraries inferred from the commit diff.",
     )
-    contribution_complexity_indicators: Optional[List[str]] = Field(
-        default_factory=list,
-        description="Indicators of complexity for this commit (e.g., 'minor typo fix', 'refactored core algorithm', 'added new API endpoint', 'significant architectural change').",
+
+    loc_added: int = Field(
+        ..., description="Number of lines of code added in the commit."
+    )
+
+    loc_removed: int = Field(
+        ..., description="Number of lines of code removed in the commit."
+    )
+
+    file_count: int = Field(..., description="Number of files modified in the commit.")
+
+    path_roots: List[str] = Field(
+        ...,
+        description="Top-level directory paths touched in this commit (e.g., 'api/user', 'client/hooks').",
     )
 
 
 class PreprocessedDiffOutput(BaseModel):
-    contributions: List[StructuredContribution]
+    """Top-level user-level summary of all commit contributions."""
+
+    last_90d_commits: int = Field(
+        ...,
+        description="Total number of commits authored by this user in the last 90 days.",
+    )
+
+    pr_review_comments: int = Field(
+        ...,
+        description="Number of pull request review comments written by this user in the last 90 days.",
+    )
+
+    commits: List[PreprocessedCommitSummary] = Field(
+        ...,
+        description="Chronologically ordered list of summarized commits (newest first).",
+    )
 
 
 class DeveloperInfo(BaseModel):

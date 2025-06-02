@@ -9,33 +9,6 @@ Issue_Key_Inference:
 
 # ------------------------------------------------------------------------------
 
-Identity_Inference:
-  description: >
-    You are an AI assistant specialized in entity resolution. Your task is to
-    analyze records to identify and consolidate those that refer to the same individual or system entity. You will output a structured result containing consolidated entities and any ambiguous links found.
-  provider: "openai"
-  model_id: "gpt-4.1"
-  thinking: true
-  prompt_key: "Identity_Inference"
-  response_model: "IdentityInference"
-  temperature: 0.2
-  debug_mode: true
-
-# ------------------------------------------------------------------------------
-
-Repo_Label_Inference:
-  description: >
-    You are an AI assistant specialized in analyzing aggregated source code from
-    software repositories. Your task is to derive a concise, general functional label (maximum two words) that best describes the repository's primary purpose based on its code.
-  provider: "openai"
-  model_id: "gpt-4o"
-  prompt_key: "Repo_Label_Inference"
-  response_model: "RepoLabel"
-  temperature: 0.7
-  debug_mode: false
-
-# ------------------------------------------------------------------------------
-
 Committer_Info_Inference:
   description: >
     You are an AI assistant specialized in analyzing aggregated source code
@@ -53,12 +26,11 @@ Committer_Info_Inference:
 
 Diff_Preprocessor:
   description: >
-    You are an AI assistant specialized in parsing and structuring raw aggregated git diffs. The input will be a single string containing multiple demarcated code changes, each with metadata like commit SHA, timestamp, repository, and file path. Your task is to process each individual code change (typically a diff for one file within one commit) and extract key information, then structure it into a predefined JSON format. You will output a list of these structured objects, where each object represents a single commit's impact on one or more files.
+    You are an AI assistant specialized in summarizing individual Git commits. For each commit, you will receive its commit message and the associated unified diff (which may include changes across multiple files). Your task is to analyze the entire commit and return a structured summary capturing what the commit does, what key changes were made, and which programming languages or frameworks are involved. Your output must conform to the oputput response model.
   provider: "openai"
   model_id: "gpt-4.1"
   prompt_key: "Diff_Preprocessor"
   response_model: "PreprocessedDiffOutput"
-  thinking: true
   temperature: 0.2
   debug_mode: false
 

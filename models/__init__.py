@@ -1,7 +1,7 @@
 from .inference_models import (
     IssueKey,
-    RepoLabel,
-    CommitterInfo,
+    GeneratedCommitSummary,
+    PreprocessedCommitSummary,
     PreprocessedDiffOutput,
     DeveloperInfo,
 )
@@ -9,8 +9,8 @@ from .inference_models import (
 
 __all__ = [
     "IssueKey",
-    "RepoLabel",
-    "CommitterInfo",
+    "GeneratedCommitSummary",
+    "PreprocessedCommitSummary",
     "PreprocessedDiffOutput",
     "DeveloperInfo",
 ]

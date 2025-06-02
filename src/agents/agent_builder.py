@@ -11,8 +11,8 @@ from agno.knowledge.agent import AgentKnowledge
 
 from models import (
     IssueKey,
-    RepoLabel,
-    CommitterInfo,
+    GeneratedCommitSummary,
+    PreprocessedCommitSummary,
     PreprocessedDiffOutput,
     DeveloperInfo,
 )
@@ -20,8 +20,8 @@ from models import (
 log = logging.getLogger(__name__)
 MAPPINGS = {
     "IssueKey": IssueKey,
-    "RepoLabel": RepoLabel,
-    "CommitterInfo": CommitterInfo,
+    "GeneratedCommitSummary": GeneratedCommitSummary,
+    "PreprocessedCommitSummary": PreprocessedCommitSummary,
     "PreprocessedDiffOutput": PreprocessedDiffOutput,
     "DeveloperInfo": DeveloperInfo,
 }
