@@ -13,6 +13,7 @@ from models import (
     IssueKey,
     GeneratedCommitSummary,
     PreprocessedCommitSummary,
+    IssueInfo,
     PreprocessedDiffOutput,
     DeveloperInfo,
 )
@@ -22,6 +23,7 @@ MAPPINGS = {
     "IssueKey": IssueKey,
     "GeneratedCommitSummary": GeneratedCommitSummary,
     "PreprocessedCommitSummary": PreprocessedCommitSummary,
+    "IssueInfo": IssueInfo,
     "PreprocessedDiffOutput": PreprocessedDiffOutput,
     "DeveloperInfo": DeveloperInfo,
 }

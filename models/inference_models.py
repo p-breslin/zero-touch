@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Dict
 
 
 class IssueKey(BaseModel):
@@ -65,9 +65,29 @@ class PreprocessedCommitSummary(BaseModel):
 
     file_count: int = Field(..., description="Number of files modified in the commit.")
 
-    path_roots: List[str] = Field(
+    file_path: List[str] = Field(
         ...,
-        description="Top-level directory paths touched in this commit (e.g., 'api/user', 'client/hooks').",
+        description="Full file path changed in this commit.",
+    )
+
+
+class IssueInfo(BaseModel):
+    issue_type: Optional[str] = Field(
+        None,
+        description="The type of the JIRA issue (e.g., 'Bug', 'Task', 'Story', 'Epic').",
+    )
+    summary: Optional[str] = Field(
+        None, description="Short text summary of the issue as authored in JIRA."
+    )
+    description: Optional[str] = Field(
+        None, description="Detailed description text from the JIRA issue, if available."
+    )
+    project_key: Optional[str] = Field(
+        None,
+        description="Key of the JIRA project that the issue belongs to.",
+    )
+    project_name: Optional[str] = Field(
+        None, description="Full name of the JIRA project the issue belongs to."
     )
 
 
@@ -78,15 +98,17 @@ class PreprocessedDiffOutput(BaseModel):
         ...,
         description="Total number of commits authored by this user in the last 90 days.",
     )
-
     pr_review_comments: int = Field(
         ...,
         description="Number of pull request review comments written by this user in the last 90 days.",
     )
-
     commits: List[PreprocessedCommitSummary] = Field(
         ...,
         description="Chronologically ordered list of summarized commits (newest first).",
+    )
+    associated_issues: Dict[str, IssueInfo] = Field(
+        default_factory=dict,
+        description="Dictionary of JIRA issues this user has interacted with, keyed by ISSUE_KEY.",
     )
 
 
