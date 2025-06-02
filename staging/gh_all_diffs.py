@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS {T_TARGET_DIFFS} (
     COMMIT_SHA       TEXT,
     COMMIT_TIMESTAMP TIMESTAMP,
     COMMITTER_ID     TEXT,
+    COMMITTER_LOGIN  TEXT,
     COMMITTER_NAME   TEXT,
     COMMIT_MESSAGE   TEXT,
     FILE_PATH        TEXT,
@@ -184,6 +185,7 @@ def _insert_diff_rows(
             str,  # COMMIT_SHA
             datetime,  # COMMIT_TIMESTAMP
             str,  # COMMITTER_ID
+            str,  # COMMITTER_LOGIN
             str,  # COMMITTER_NAME
             str,  # COMMIT_MESSAGE
             str,  # FILE_PATH
@@ -204,10 +206,10 @@ def _insert_diff_rows(
             f"""
             INSERT INTO "{T_TARGET_DIFFS}" (
                 ORG, REPO, COMMIT_SHA, COMMIT_TIMESTAMP,
-                COMMITTER_ID, COMMITTER_NAME, COMMIT_MESSAGE,
+                COMMITTER_ID, COMMITTER_LOGIN, COMMITTER_NAME, COMMIT_MESSAGE,
                 FILE_PATH, FILE_ADDITIONS, FILE_DELETIONS, FILE_CHANGES,
                 DIFF
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(ORG, REPO, COMMIT_SHA, FILE_PATH) DO NOTHING;
             """,
             rows,
@@ -224,7 +226,7 @@ def process_committer(
 ) -> None:
     """Stage diffs for committer_login until MAX_DIFFS_PER_USER is reached."""
     staged_rows: List[
-        Tuple[str, str, str, datetime, str, str, str, str, int, int, int, str]
+        Tuple[str, str, str, datetime, str, str, str, str, str, int, int, int, str]
     ] = []
     diff_cap = MAX_DIFFS_PER_USER
     diff_cnt = 0
@@ -279,7 +281,9 @@ def process_committer(
                     )
                     org_name, repo_name = slug.split("/", 1)
 
-                author_name = committer_name or details.author.name or committer_login
+                author = commit.author or ""
+                committer_id = str(author.id) or ""
+                committer_login_actual = author.login or ""
 
                 for file_obj in commit.files or []:
                     if diff_cnt >= diff_cap:
@@ -296,8 +300,9 @@ def process_committer(
                                 repo_name,
                                 commit.sha,
                                 ts,
-                                committer_login,
-                                author_name,
+                                committer_id,
+                                committer_login_actual,
+                                author,
                                 details.message,
                                 file_obj.filename,
                                 additions,
