@@ -5,12 +5,12 @@ import logging
 from pathlib import Path
 from dotenv import load_dotenv
 from agno.agent import RunResponse
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict, Any
 
 from scripts.paths import DATA_DIR
 from utils.helpers import db_manager
-from agents.agent_builder import build_agent
 from utils.logging_setup import setup_logging
+from src.agents.agent_builder import build_agent
 from models import (
     GeneratedCommitSummary,
     PreprocessedCommitSummary,
@@ -18,16 +18,19 @@ from models import (
 )
 
 """
-Preprocesses aggregated code diffs using an AI agent.
+Preprocesses individual commit diffs into structured summaries using AI agents.
 
 Description
 -----------
-Analyzes commit diffs from developers and converts them into structured contribution data using agents.
+Generates structured summaries of individual commits for each committer by analyzing commit message and diff content. Pulls commits directly from the GITHUB_DIFFS table instead of relying on aggregated diffs. Each commit is summarized into change description, technologies used, and metadata. Results are stored in the INFERENCE_INFO table as JSON strings.
 
-    1. Loads committer IDs, names, and aggregated diffs that have not yet been preprocessed.
-    2. Sends each code diff to an agent for structured parsing into a structured response model.
-    3. Serializes the contributions as a JSON string and inserts them into the database.
-    4. Limits the number of committers and controls concurrency with a semaphore.
+    1. Loads distinct committers from GITHUB_DIFFS who are not yet in INFERENCE_INFO.
+    2. For each committer, retrieves their individual commit messages and diffs.
+    3. Sends each commit to an gent for summarization.
+    4. Builds a PreprocessedDiffOutput object containing summaries, key changes, languages, and file metadata.
+    5. Serializes the structured output and stores it in the database.
+
+Includes developer review activity by counting authored comments in REVIEW_COMMENTS. Supports asynchronous execution with concurrency limits.
 """
 
 
@@ -36,39 +39,80 @@ load_dotenv()
 setup_logging()
 log = logging.getLogger(__name__)
 
-T_COMMITTER_DIFFS_SOURCE = "COMMITTER_DIFFS"
-T_PREPROCESSED_OUTPUT = "PREPROCESSED_DIFFS"
-DB_PATH = Path(DATA_DIR, f"{os.environ['DUCKDB_STAGING_NAME']}.duckdb")
+T_COMMITTER_DIFFS_SOURCE = "GITHUB_DIFFS"
+T_OUTPUT = "INFERENCE_INFO"
+
+STG_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_STAGING_NAME']}.duckdb")
+MAIN_DB = Path(DATA_DIR, f"{os.getenv('DUCKDB_NAME')}.duckdb")
+
 LIMIT = int(os.getenv("PREPROCESS_LIMIT", 1000))
 CONCUR = int(os.getenv("PREPROCESS_CONCURRENCY", 10))
 AGENT_KEY = "Diff_Preprocessor"
 
 
-# SQL helpers ------------------------------------------------------------------
-def _load_commits_for_user(conn, committer_id: str) -> List[dict]:
+# Database operations ----------------------------------------------------------
+def _load_commits_for_user(conn, user_id: str) -> List[Dict[str, Any]]:
     q = """
-        SELECT COMMIT_MESSAGE, DIFF, FILE_ADDITIONS, FILE_DELETIONS, FILE_PATH
-        FROM COMMIT_DIFFS
+        SELECT COMMIT_SHA, COMMIT_MESSAGE, COMMIT_TIMESTAMP, FILE_PATH, DIFF, FILE_ADDITIONS, FILE_DELETIONS
+        FROM GITHUB_DIFFS
         WHERE COMMITTER_ID = ?
-          AND DIFF IS NOT NULL AND DIFF != ''
-        ORDER BY COMMIT_TIMESTAMP DESC;
+        ORDER BY COMMIT_TIMESTAMP DESC
     """
-    rows = conn.execute(q, (committer_id,)).fetchall()
-    commits = {}
-    for msg, diff, add, del_, path in rows:
-        key = (msg, diff)
-        if key not in commits:
-            commits[key] = {
-                "commit_message": msg,
-                "diff": diff,
+    rows = conn.execute(q, (user_id,)).fetchall()
+
+    commits: Dict[str, Dict[str, Any]] = {}
+
+    for sha, msg, ts, path, diff, additions, deletions in rows:
+        if sha not in commits:
+            commits[sha] = {
+                "commit_sha": sha,
+                "message": msg,
+                "timestamp": ts,
                 "file_paths": set(),
-                "loc_added": 0,
-                "loc_removed": 0,
+                "diffs": [],
+                "additions": 0,
+                "deletions": 0,
             }
-        commits[key]["file_paths"].add(path)
-        commits[key]["loc_added"] += add
-        commits[key]["loc_removed"] += del_
+
+        commits[sha]["file_paths"].add(path)
+        commits[sha]["diffs"].append(diff)
+        commits[sha]["additions"] += additions
+        commits[sha]["deletions"] += deletions
+
     return list(commits.values())
+
+
+def _insert_inference_info(
+    conn,
+    rows: List[Tuple[str, Optional[str], Optional[str]]],
+):
+    """
+    Inserts commit summaries into INFERENCE_INFO table. Each row is (GITHUB_ID, GITHUB_DISPLAY_NAME, DIFF_SUMMARIES as JSON string).
+    """
+    if not rows:
+        log.debug("No inference info rows to insert.")
+        return
+
+    conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS {T_OUTPUT} (
+            GITHUB_ID TEXT PRIMARY KEY,
+            GITHUB_DISPLAY_NAME TEXT,
+            DIFF_SUMMARIES TEXT -- JSON string of structured summaries
+        );
+    """)
+
+    conn.executemany(
+        f"""
+        INSERT INTO {T_OUTPUT} (GITHUB_ID, GITHUB_DISPLAY_NAME, DIFF_SUMMARIES)
+        VALUES (?, ?, ?)
+        ON CONFLICT (GITHUB_ID) DO UPDATE SET
+            GITHUB_DISPLAY_NAME = excluded.GITHUB_DISPLAY_NAME,
+            DIFF_SUMMARIES = excluded.DIFF_SUMMARIES;
+        """,
+        rows,
+    )
+    conn.commit()
+    log.info("Inserted inference info for %d users", len(rows))
 
 
 def extract_path_roots(paths: set[str]) -> List[str]:
@@ -76,73 +120,43 @@ def extract_path_roots(paths: set[str]) -> List[str]:
 
 
 def get_review_comment_count(conn, user_id: str) -> int:
+    """
+    Returns the number of review comments authored by the given user,
+    using the REVIEW_COMMENTS table from the MAIN_DB.
+    """
     q = """
-        SELECT COUNT(*) FROM REVIEW_COMMENTS
+        SELECT COUNT(*) FROM XFLOW_DEV_GITHUB_.REVIEW_COMMENTS
         WHERE json_extract_string(USER, '$.id') = ?
     """
-    result = conn.execute(q, (user_id,)).fetchone()
-    return result[0] if result else 0
+    with db_manager(MAIN_DB) as conn:
+        result = conn.execute(q, (user_id,)).fetchone()
+        return result[0] if result else 0
 
 
 def _load_committers_for_preprocessing(
     conn, limit: int
-) -> List[Tuple[str, Optional[str], Optional[str]]]:
+) -> List[Tuple[str, Optional[str]]]:
     """
-    Load committers with their aggregated diffs for preprocessing. Avoids reprocessing committers already in T_PREPROCESSED_OUTPUT.
+    Loads distinct committers from GITHUB_DIFFS who have not yet been preprocessed. Skips those already in PREPROCESSED_DIFFS.
     """
     tables = {row[0] for row in conn.execute("SHOW TABLES").fetchall()}
 
-    if T_PREPROCESSED_OUTPUT in tables:
+    if T_OUTPUT in tables:
         q = f"""
-            SELECT COMMITTER_ID, COMMITTER_NAME, AGGREGATED_DIFFS
+            SELECT DISTINCT COMMITTER_ID, COMMITTER_NAME
             FROM   {T_COMMITTER_DIFFS_SOURCE}
-            WHERE  COMMITTER_ID NOT IN (SELECT COMMITTER_ID FROM {T_PREPROCESSED_OUTPUT})
-              AND AGGREGATED_DIFFS IS NOT NULL AND AGGREGATED_DIFFS != ''
+            WHERE  COMMITTER_ID NOT IN (SELECT COMMITTER_ID FROM {T_OUTPUT})
+              AND COMMITTER_ID IS NOT NULL
             LIMIT  {limit};
         """
     else:
         q = f"""
-            SELECT COMMITTER_ID, COMMITTER_NAME, AGGREGATED_DIFFS
+            SELECT DISTINCT COMMITTER_ID, COMMITTER_NAME
             FROM   {T_COMMITTER_DIFFS_SOURCE}
-            WHERE  AGGREGATED_DIFFS IS NOT NULL AND AGGREGATED_DIFFS != ''
+            WHERE  COMMITTER_ID IS NOT NULL
             LIMIT  {limit};
         """
     return conn.execute(q).fetchall()
-
-
-def _insert_preprocessed_contributions(
-    conn,
-    rows: List[
-        Tuple[
-            str,  # COMMITTER_ID
-            Optional[str],  # COMMITTER_NAME
-            Optional[str],  # JSON str of PreprocessedDiffOutput.contributions
-        ]
-    ],
-):
-    if not rows:
-        log.debug("No preprocessed contribution rows to insert.")
-        return
-
-    conn.execute(f"""
-        CREATE TABLE IF NOT EXISTS {T_PREPROCESSED_OUTPUT} (
-            COMMITTER_ID TEXT PRIMARY KEY,
-            COMMITTER_NAME TEXT,
-            STRUCTURED_CONTRIBUTIONS TEXT -- Storing as JSON string
-        );
-    """)
-
-    conn.executemany(
-        f"""
-        INSERT INTO {T_PREPROCESSED_OUTPUT} (
-            COMMITTER_ID, COMMITTER_NAME, STRUCTURED_CONTRIBUTIONS
-        ) VALUES (?, ?, ?)
-        ON CONFLICT DO NOTHING;
-        """,
-        rows,
-    )
-    conn.commit()
-    log.info("Inserted preprocessed contribution data for %d committers", len(rows))
 
 
 # Agent logic ------------------------------------------------------------------
@@ -165,39 +179,68 @@ async def _summarize_commit(
 
 
 async def _preprocess_diffs(
-    committer_id: str, committer_name: Optional[str], _: Optional[str]
+    committer_id: str,
+    committer_name: Optional[str],
+    stg_conn,
+    main_conn,
+    sem: asyncio.Semaphore,
 ) -> Tuple[str, Optional[str], Optional[str]]:
     try:
-        with db_manager(DB_PATH) as conn:
-            raw_commits = _load_commits_for_user(conn, committer_id)
-            pr_review_comments = get_review_comment_count(conn, committer_id)
-
+        raw_commits = _load_commits_for_user(stg_conn, committer_id)
         if not raw_commits:
             log.warning(f"No commits found for committer {committer_id}.")
             return committer_id, committer_name, None
 
-        sem = asyncio.Semaphore(CONCUR)
+        pr_review_comments = get_review_comment_count(main_conn, committer_id)
+
+        # Budgeted filtering logic
+        MAX_TOTAL_DIFF_CHARS = 100000
+        filtered_commits = []
+        char_sum_so_far = 0
+
+        total_commit_count = len(raw_commits)
+        for commit in raw_commits:
+            diff_str = "\n".join(commit["diffs"])
+            diff_len = len(diff_str)
+
+            if (
+                filtered_commits
+                and char_sum_so_far + diff_len > MAX_TOTAL_DIFF_CHARS * 1.5
+            ):
+                log.info(
+                    "Char budget used: %d / %d", char_sum_so_far, MAX_TOTAL_DIFF_CHARS
+                )
+                break
+
+            commit["joined_diff"] = diff_str
+            filtered_commits.append(commit)
+            char_sum_so_far += diff_len
+
+        if not filtered_commits:
+            log.warning(f"No commits within budget for committer {committer_id}.")
+            return committer_id, committer_name, None
 
         async def _task(commit):
             async with sem:
                 agent_summary = await _summarize_commit(
-                    commit["commit_message"], commit["diff"]
+                    commit["message"], commit["joined_diff"]
                 )
                 if not agent_summary:
                     return None
+                log.info("An agent returned a Commit Summary. Prcocessing..")
                 return PreprocessedCommitSummary(
-                    commit_message=commit["commit_message"],
+                    commit_message=commit["message"],
                     summary=agent_summary.summary,
                     key_changes=agent_summary.key_changes,
                     langs=agent_summary.langs,
                     frameworks=agent_summary.frameworks,
-                    loc_added=commit["loc_added"],
-                    loc_removed=commit["loc_removed"],
+                    loc_added=commit["additions"],
+                    loc_removed=commit["deletions"],
                     file_count=len(commit["file_paths"]),
                     path_roots=extract_path_roots(commit["file_paths"]),
                 )
 
-        tasks = [_task(commit) for commit in raw_commits]
+        tasks = [_task(commit) for commit in filtered_commits]
         results = await asyncio.gather(*tasks)
         valid = [r for r in results if r is not None]
 
@@ -205,8 +248,9 @@ async def _preprocess_diffs(
             log.warning(f"No valid commit summaries for committer {committer_id}.")
             return committer_id, committer_name, None
 
+        log.info("Perparing the Preprocessed Diff Output..")
         output = PreprocessedDiffOutput(
-            last_90d_commits=len(valid),
+            last_90d_commits=total_commit_count,
             pr_review_comments=pr_review_comments,
             commits=valid,
         )
@@ -224,39 +268,33 @@ async def _preprocess_diffs(
 
 # Concurrency helper -----------------------------------------------------------
 async def _bounded_preprocess_diffs(
-    row: Tuple[str, Optional[str], Optional[str]], sem: asyncio.Semaphore
-) -> Tuple[
-    str,
-    Optional[str],
-    Optional[
-        str
-    ],  # COMMITTER_ID, COMMITTER_NAME, STRUCTURED_CONTRIBUTIONS (JSON string)
-]:
-    committer_id, committer_name, diffs_data = row
-    async with sem:
-        return await _preprocess_diffs(
-            committer_id, committer_name, diffs_data if diffs_data else None
-        )
+    row: Tuple[str, Optional[str]], stg_conn, main_conn, sem: asyncio.Semaphore
+) -> Tuple[str, Optional[str], Optional[str]]:
+    committer_id, committer_name = row
+    return await _preprocess_diffs(
+        committer_id, committer_name, stg_conn, main_conn, sem
+    )
 
 
 # Main async -------------------------------------------------------------------
 async def _run_preprocessing():
-    with db_manager(DB_PATH) as conn:
-        rows_to_process = _load_committers_for_preprocessing(conn, LIMIT)
+    with db_manager(STG_DB) as stg_conn, db_manager(MAIN_DB) as main_conn:
+        rows_to_process = _load_committers_for_preprocessing(stg_conn, LIMIT)
         if not rows_to_process:
             log.info("No new committers need diff preprocessing.")
             return
 
         log.info("Starting preprocessing for %d committers.", len(rows_to_process))
-        sem = asyncio.Semaphore(CONCUR)
-        tasks = [_bounded_preprocess_diffs(row, sem) for row in rows_to_process]
+        global_sem = asyncio.Semaphore(CONCUR)
+        tasks = [
+            _bounded_preprocess_diffs(row, stg_conn, main_conn, global_sem)
+            for row in rows_to_process
+        ]
         results = await asyncio.gather(*tasks)
 
-        # Filter out None results before inserting
-        valid_results = [
-            res for res in results if res is not None and res[2] is not None
-        ]
-        _insert_preprocessed_contributions(conn, valid_results)
+        # Filter out None and empty results
+        valid_results = [res for res in results if res and res[2]]
+        _insert_inference_info(stg_conn, valid_results)
 
 
 # Entry point ------------------------------------------------------------------
@@ -272,3 +310,17 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+async def test_single_user():
+    with db_manager(STG_DB) as stg_conn, db_manager(MAIN_DB) as main_conn:
+        global_sem = asyncio.Semaphore(CONCUR)
+        results = await _preprocess_diffs(
+            "161881863", "Michael Gebis", stg_conn, main_conn, global_sem
+        )
+        print(results)
+        valid_results = [res for res in results if res and res[2]]
+        _insert_inference_info(stg_conn, [valid_results])
+
+
+# asyncio.run(test_single_user())
