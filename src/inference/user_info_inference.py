@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os
+import json
 import asyncio
 import logging
 from pathlib import Path
@@ -8,10 +9,10 @@ from agno.agent import RunResponse
 from typing import List, Tuple, Optional
 
 from scripts.paths import DATA_DIR
-from utils.helpers import db_manager
 from utils.logging_setup import setup_logging
 from src.agents.agent_builder import build_agent
-from models import PreprocessedDiffOutput, DeveloperInfo
+from models import InferenceOutput, DeveloperInfo
+from utils.helpers import db_manager, validate_output
 
 """
 Infers developer profiles from structured commit summaries using AI agents.
@@ -36,9 +37,15 @@ T_INPUT = "INFERENCE_INFO"
 T_OUTPUT = "DEVELOPER_INFERENCE"
 DB_PATH = Path(DATA_DIR, f"{os.environ['DUCKDB_STAGING_NAME']}.duckdb")
 
-LIMIT = int(os.getenv("PROFILE_INFER_LIMIT", 1000))
+LIMIT = int(os.getenv("PROFILE_INFER_LIMIT", 1))
 CONCUR = int(os.getenv("PROFILE_INFER_CONCURRENCY", 20))
-AGENT_KEY = "Developer_Inference"
+# AGENT_KEY = "Developer_Inference"
+AGENT_KEY = "Developer_Inference_gemini"
+
+
+# Helpers ----------------------------------------------------------------------
+def pydantic_to_gemini(output_model: InferenceOutput) -> str:
+    return json.dumps(output_model.model_dump(), ensure_ascii=False, indent=None)
 
 
 # Load committers with data ----------------------------------------------------
@@ -101,16 +108,23 @@ async def _infer_profile(
     db_id: str, display_name: str, summaries_json: str
 ) -> Optional[Tuple[str, str, str, str, str, str, str]]:
     try:
-        parsed = PreprocessedDiffOutput.model_validate_json(summaries_json)
+        parsed = InferenceOutput.model_validate_json(summaries_json)
         if not parsed or not parsed.commits:
             log.warning(f"Empty commit list for {display_name}")
             return None
 
         agent = build_agent(AGENT_KEY)
-        resp: RunResponse = await agent.arun(structured_json_input=parsed)
 
-        if resp and isinstance(resp.content, DeveloperInfo):
-            info = resp.content
+        if "gemini" in AGENT_KEY:
+            prompt = pydantic_to_gemini(parsed)
+            resp: RunResponse = await agent.arun(prompt)
+            info = validate_output(resp.content, DeveloperInfo)
+
+        else:
+            resp: RunResponse = await agent.arun(structured_json_input=parsed)
+            info = resp.content if isinstance(resp.content, DeveloperInfo) else None
+
+        if info:
             skills_str = ", ".join(info.skills) if info.skills else ""
             log.info(
                 "Profile for %s: %s (%s)",
