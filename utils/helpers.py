@@ -95,6 +95,24 @@ def validate_response(output_content, response_model, savefile=None):
             return None
 
 
+def validate_output(output_content, schema):
+    """Validates an agent's structured response to the predefined schema."""
+    try:
+        # Convert to JSON if response not structured (like Google)
+        if isinstance(output_content, str):
+            output_content = parse_json(output_content)
+
+        # Ensure JSON object is a Pydantic model instance
+        if not isinstance(output_content, schema):
+            output_content = schema(**output_content)
+
+        return output_content
+
+    # Handle case if content isn't a Pydantic model
+    except AttributeError:
+        log.warning("Output content does not have model_dump method.")
+
+
 def parse_json(json_string: str):
     """Tries to parse a string as JSON."""
     try:
