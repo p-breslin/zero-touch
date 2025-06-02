@@ -9,9 +9,13 @@ from typing import List, Tuple, Optional
 
 from scripts.paths import DATA_DIR
 from utils.helpers import db_manager
-from models import PreprocessedDiffOutput
 from agents.agent_builder import build_agent
 from utils.logging_setup import setup_logging
+from models import (
+    GeneratedCommitSummary,
+    PreprocessedCommitSummary,
+    PreprocessedDiffOutput,
+)
 
 """
 Preprocesses aggregated code diffs using an AI agent.
@@ -41,6 +45,45 @@ AGENT_KEY = "Diff_Preprocessor"
 
 
 # SQL helpers ------------------------------------------------------------------
+def _load_commits_for_user(conn, committer_id: str) -> List[dict]:
+    q = """
+        SELECT COMMIT_MESSAGE, DIFF, FILE_ADDITIONS, FILE_DELETIONS, FILE_PATH
+        FROM COMMIT_DIFFS
+        WHERE COMMITTER_ID = ?
+          AND DIFF IS NOT NULL AND DIFF != ''
+        ORDER BY COMMIT_TIMESTAMP DESC;
+    """
+    rows = conn.execute(q, (committer_id,)).fetchall()
+    commits = {}
+    for msg, diff, add, del_, path in rows:
+        key = (msg, diff)
+        if key not in commits:
+            commits[key] = {
+                "commit_message": msg,
+                "diff": diff,
+                "file_paths": set(),
+                "loc_added": 0,
+                "loc_removed": 0,
+            }
+        commits[key]["file_paths"].add(path)
+        commits[key]["loc_added"] += add
+        commits[key]["loc_removed"] += del_
+    return list(commits.values())
+
+
+def extract_path_roots(paths: set[str]) -> List[str]:
+    return list({p.split("/")[0] for p in paths if "/" in p})
+
+
+def get_review_comment_count(conn, user_id: str) -> int:
+    q = """
+        SELECT COUNT(*) FROM REVIEW_COMMENTS
+        WHERE json_extract_string(USER, '$.id') = ?
+    """
+    result = conn.execute(q, (user_id,)).fetchone()
+    return result[0] if result else 0
+
+
 def _load_committers_for_preprocessing(
     conn, limit: int
 ) -> List[Tuple[str, Optional[str], Optional[str]]]:
@@ -103,50 +146,75 @@ def _insert_preprocessed_contributions(
 
 
 # Agent logic ------------------------------------------------------------------
-async def _preprocess_diffs(
-    committer_id: str, committer_name: Optional[str], aggregated_diffs: Optional[str]
-) -> Tuple[
-    str,  # COMMITTER_ID
-    Optional[str],  # COMMITTER_NAME
-    Optional[str],  # JSON str of PreprocessedDiffOutput.contributions
-]:
-    if not aggregated_diffs or not aggregated_diffs.strip():
-        log.warning(f"Committer {committer_id} has no aggregated_diffs to preprocess.")
-        return committer_id, committer_name, None
-
+async def _summarize_commit(
+    commit_msg: str, diff_text: str
+) -> Optional[GeneratedCommitSummary]:
     try:
         agent = build_agent(AGENT_KEY)
-        log.debug(
-            f"Preprocessing diffs for committer {committer_id}. AGGREGATED_DIFFS snippet:\n{aggregated_diffs[:500]}"
+        message = f"=== Commit message ===\n{commit_msg}\n\n=== Diff ===\n{diff_text}"
+        resp: RunResponse = await agent.arun(message=message)
+
+        if resp and isinstance(resp.content, GeneratedCommitSummary):
+            return resp.content
+        else:
+            log.warning("Unexpected or empty response from commit summarizer.")
+            return None
+    except Exception as exc:
+        log.error("Error summarizing commit: %s", exc, exc_info=True)
+        return None
+
+
+async def _preprocess_diffs(
+    committer_id: str, committer_name: Optional[str], _: Optional[str]
+) -> Tuple[str, Optional[str], Optional[str]]:
+    try:
+        with db_manager(DB_PATH) as conn:
+            raw_commits = _load_commits_for_user(conn, committer_id)
+            pr_review_comments = get_review_comment_count(conn, committer_id)
+
+        if not raw_commits:
+            log.warning(f"No commits found for committer {committer_id}.")
+            return committer_id, committer_name, None
+
+        sem = asyncio.Semaphore(CONCUR)
+
+        async def _task(commit):
+            async with sem:
+                agent_summary = await _summarize_commit(
+                    commit["commit_message"], commit["diff"]
+                )
+                if not agent_summary:
+                    return None
+                return PreprocessedCommitSummary(
+                    commit_message=commit["commit_message"],
+                    summary=agent_summary.summary,
+                    key_changes=agent_summary.key_changes,
+                    langs=agent_summary.langs,
+                    frameworks=agent_summary.frameworks,
+                    loc_added=commit["loc_added"],
+                    loc_removed=commit["loc_removed"],
+                    file_count=len(commit["file_paths"]),
+                    path_roots=extract_path_roots(commit["file_paths"]),
+                )
+
+        tasks = [_task(commit) for commit in raw_commits]
+        results = await asyncio.gather(*tasks)
+        valid = [r for r in results if r is not None]
+
+        if not valid:
+            log.warning(f"No valid commit summaries for committer {committer_id}.")
+            return committer_id, committer_name, None
+
+        output = PreprocessedDiffOutput(
+            last_90d_commits=len(valid),
+            pr_review_comments=pr_review_comments,
+            commits=valid,
         )
-
-        resp: RunResponse = await agent.arun(message=aggregated_diffs)
-
-        if resp and isinstance(resp.content, PreprocessedDiffOutput):
-            output_model: PreprocessedDiffOutput = resp.content
-            contributions_json = output_model.model_dump_json()
-
-            log.info(
-                "Diff preprocessing complete for committer %s. Number of structured contributions: %d",
-                committer_id,
-                len(output_model.contributions),
-            )
-            return (
-                committer_id,
-                committer_name,
-                contributions_json,
-            )
-
-        log.warning(
-            "Committer %s diff preprocessing returned no valid structured output. Response type: %s",
-            committer_id,
-            type(resp.content) if resp else "None",
-        )
-        return committer_id, committer_name, None
+        return committer_id, committer_name, output.model_dump_json()
 
     except Exception as exc:
         log.error(
-            "Diff preprocessing agent error for committer %s: %s",
+            "User-level diff preprocessing failed for %s: %s",
             committer_id,
             exc,
             exc_info=True,
