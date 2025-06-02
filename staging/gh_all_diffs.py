@@ -22,17 +22,20 @@ from utils.helpers import db_manager
 from utils.logging_setup import setup_logging
 
 """
-Collects ALL GitHub commit diffs per user for downstream analysis.
+Collects ALL GitHub commit diffs and metadata per user for downstream analysis.
 
 Description
 -----------
-Fetches and stages GitHub commit diffs for each known contributor in a specified organization. Stores structured diff records in the GITHUB_DIFFS table, limited by user and per-repo commit counts.
+Fetches and stages GitHub commit diffs and file-level metadata for each known contributor. Stores structured diff records in the GITHUB_DIFFS table, limited by user and per-repo commit counts.
 
-    1. Loads contributor GitHub logins and display names from CONSOLIDATED_GH_USERS.
-    2. Retrieves all repos in the organization, sorted by most recently pushed.
-    3. For each contributor, fetches new commits in each repo (up to MAX_COMMITS_PER_REPO).
-    4. Extracts and filters code patches for each file in each commit.
-    5. Stages and inserts diffs (ORG, REPO, COMMIT_SHA, TIMESTAMP, etc.) up to MAX_DIFFS_PER_USER.
+    1. Loads contributor GitHub logins and display names from MATCHED_USERS.
+    2. Retrieves all repos in the org, sorted by most recently pushed.
+    3. For each contributor, fetches new commits from each repo.
+    4. For each commit:
+        a. Extracts the full commit message.
+        b. Extracts per-file patches and change statistics (adds, dels, tot).
+    5. Stages structured per-file diff records with message and metadata.
+    6. Limits insertions to MAX_DIFFS_PER_USER per contributor.
 """
 
 
@@ -45,7 +48,7 @@ COMPANY_ORG_NAME: str = os.getenv("GITHUB_ORG_NAME")
 DB_PATH: Path = Path(DATA_DIR, f"{os.getenv('DUCKDB_STAGING_NAME')}.duckdb")
 
 T_TARGET_DIFFS = "GITHUB_DIFFS"
-T_SOURCE_USERS = "CONSOLIDATED_GH_USERS"
+T_SOURCE_USERS = "MATCHED_USERS"
 
 # Configuration ---------------------------------------------------------------
 MAX_DIFFS_PER_USER: int = int(os.getenv("MAX_DIFFS_PER_USER", 200))
@@ -64,10 +67,14 @@ CREATE TABLE IF NOT EXISTS {T_TARGET_DIFFS} (
     REPO             TEXT,
     COMMIT_SHA       TEXT,
     COMMIT_TIMESTAMP TIMESTAMP,
-    COMMITTER_ID     TEXT,      -- GitHub login queried
-    COMMITTER_NAME   TEXT,      -- Display name if available
+    COMMITTER_ID     TEXT,
+    COMMITTER_NAME   TEXT,
+    COMMIT_MESSAGE   TEXT,
     FILE_PATH        TEXT,
-    CODE_TEXT        TEXT,      -- Diff / patch text
+    FILE_ADDITIONS   INTEGER,
+    FILE_DELETIONS   INTEGER,
+    FILE_CHANGES     INTEGER,
+    DIFF             TEXT,
     PRIMARY KEY (ORG, REPO, COMMIT_SHA, FILE_PATH)
 );
 """
@@ -133,7 +140,7 @@ def _fetch_commits_for_user_in_repo(
     committer_login: str,
     existing_commit_shas: Set[str],
 ) -> List[GHCommit]:
-    """Return **new** commits by *committer_login* in *repo_obj* (capped)."""
+    """Return new commits by committer_login in repo_obj (capped)."""
     commits: List[GHCommit] = []
     try:
         for commit in repo_obj.get_commits(author=committer_login):  # paginated
@@ -170,9 +177,24 @@ def _fetch_commits_for_user_in_repo(
 
 # Database operations ----------------------------------------------------------
 def _insert_diff_rows(
-    rows: List[Tuple[str, str, str, datetime, str, str, str, str]],
+    rows: List[
+        Tuple[
+            str,  # ORG
+            str,  # REPO
+            str,  # COMMIT_SHA
+            datetime,  # COMMIT_TIMESTAMP
+            str,  # COMMITTER_ID
+            str,  # COMMITTER_NAME
+            str,  # COMMIT_MESSAGE
+            str,  # FILE_PATH
+            int,  # FILE_ADDITIONS
+            int,  # FILE_DELETIONS
+            int,  # FILE_CHANGES
+            str,  # DIFF
+        ]
+    ],
 ) -> None:
-    """Batch-insert rows into DuckDB, ignoring conflicts."""
+    """Batch-insert rows, ignoring conflicts."""
     if not rows:
         return
 
@@ -182,8 +204,10 @@ def _insert_diff_rows(
             f"""
             INSERT INTO "{T_TARGET_DIFFS}" (
                 ORG, REPO, COMMIT_SHA, COMMIT_TIMESTAMP,
-                COMMITTER_ID, COMMITTER_NAME, FILE_PATH, CODE_TEXT
-            ) VALUES (?,?,?,?,?,?,?,?)
+                COMMITTER_ID, COMMITTER_NAME, COMMIT_MESSAGE,
+                FILE_PATH, FILE_ADDITIONS, FILE_DELETIONS, FILE_CHANGES,
+                DIFF
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(ORG, REPO, COMMIT_SHA, FILE_PATH) DO NOTHING;
             """,
             rows,
@@ -198,8 +222,10 @@ def process_committer(
     committer_name: Optional[str],
     repos: List[GHRepository],
 ) -> None:
-    """Stage diffs for *committer_login* until MAX_DIFFS_PER_USER is reached."""
-    staged_rows: List[Tuple[str, str, str, datetime, str, str, str, str]] = []
+    """Stage diffs for committer_login until MAX_DIFFS_PER_USER is reached."""
+    staged_rows: List[
+        Tuple[str, str, str, datetime, str, str, str, str, int, int, int, str]
+    ] = []
     diff_cap = MAX_DIFFS_PER_USER
     diff_cnt = 0
 
@@ -221,7 +247,7 @@ def process_committer(
             commits = _fetch_commits_for_user_in_repo(repo, committer_login, existing)
         except RateLimitExceededException:
             return
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             log.error(
                 "%s -> unexpected error for %s: %s",
                 repo.full_name,
@@ -260,6 +286,10 @@ def process_committer(
                         break
                     patch = _get_diff_for_file(file_obj)
                     if patch:
+                        additions = getattr(file_obj, "additions", 0)
+                        deletions = getattr(file_obj, "deletions", 0)
+                        changes = getattr(file_obj, "changes", additions + deletions)
+
                         staged_rows.append(
                             (
                                 org_name,
@@ -268,7 +298,11 @@ def process_committer(
                                 ts,
                                 committer_login,
                                 author_name,
+                                details.message,
                                 file_obj.filename,
+                                additions,
+                                deletions,
+                                changes,
                                 patch,
                             )
                         )
@@ -308,11 +342,11 @@ def main() -> None:
     for login, name in committers:
         try:
             process_committer(login, name, org_repos)
-            # time.sleep(1)  # - uncomment to be kinder to API if needed
+            # time.sleep(1)  # for API rates if needed
         except RateLimitExceededException:
             log.critical("Global rate-limit reached - stopping early.")
             break
-        except Exception:  # noqa: BLE001
+        except Exception:
             log.exception("Unhandled error processing %s", login)
 
     log.info("Diff collection complete.")
