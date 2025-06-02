@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 import os
 import logging
 from pathlib import Path
@@ -13,6 +12,22 @@ from scripts.paths import DATA_DIR
 from utils.helpers import db_manager
 from utils.logging_setup import setup_logging
 
+
+"""
+Snapshots recent GitHub repos and records file-level metadata for analysis.
+
+Description
+-----------
+Scans active repositories in a GitHub organization and collects file metadata from the latest commit on the default branch. Extracts directory structure, file name, extension, and size, then stores the results in the REPO_FILES table with timestamps.
+
+    1. Retrieves repositories from the organization that were pushed in the last 90 days.
+    2. For each repo, fetches the latest commit and walks the file tree recursively.
+    3. Extracts file-level information including path, directory, name, extension, and size.
+    4. Records metadata with timestamps and inserts it into the REPO_FILES table.
+
+Skips non-blob entries (e.g. directories, symlinks). Handles missing repos, API errors, and retries gracefully. Run this script to snapshot repository structure and support audits, search, or analytics on active codebases.
+"""
+
 # Configuration ----------------------------------------------------------------
 load_dotenv()
 setup_logging()
@@ -25,6 +40,7 @@ _GH_TOKEN = os.getenv("GITHUB_PERSONAL_ACCESS_TOKEN")
 ORG_NAME = os.getenv("GITHUB_ORG_NAME")
 MAX_REPOS = int(os.getenv("MAX_REPOS_TO_SNAPSHOT", 500))  # api rate limit
 _G = Github(_GH_TOKEN, per_page=100, retry=3)
+
 
 # DDL --------------------------------------------------------------------------
 DDL_REPO_FILES = f"""
