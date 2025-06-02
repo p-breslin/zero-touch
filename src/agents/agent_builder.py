@@ -2,7 +2,7 @@ import logging
 from sqlalchemy import Engine
 from typing import Any, List, Dict, Optional
 
-from agents.base_agent import build_base_agent
+from src.agents.base_agent import build_base_agent
 from utils.helpers import load_yaml, resolve_model
 
 # from agno.tools.sql import SQLTools

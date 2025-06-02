@@ -11,7 +11,7 @@ class GeneratedCommitSummary(BaseModel):
 
     summary: str = Field(
         ...,
-        description="One- to two-sentence summary describing the purpose and scope of the changes in the commit.",
+        description="One- to three-sentence summary describing the purpose and scope of the changes in the commit.",
     )
 
     key_changes: List[str] = Field(

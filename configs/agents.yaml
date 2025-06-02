@@ -30,7 +30,7 @@ Diff_Preprocessor:
   provider: "openai"
   model_id: "gpt-4.1"
   prompt_key: "Diff_Preprocessor"
-  response_model: "PreprocessedDiffOutput"
+  response_model: "GeneratedCommitSummary"
   temperature: 0.2
   debug_mode: false
 
