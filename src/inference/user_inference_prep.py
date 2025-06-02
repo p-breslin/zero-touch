@@ -304,12 +304,10 @@ async def _preprocess_diffs(
 
 # Concurrency helper -----------------------------------------------------------
 async def _bounded_preprocess_diffs(
-    row: Tuple[str, Optional[str]], stg_conn, main_conn, sem: asyncio.Semaphore
+    row: Tuple[str], stg_conn, main_conn, sem: asyncio.Semaphore
 ) -> Tuple[str, Optional[str], Optional[str], Optional[str]]:
-    committer_id, committer_name = row
-    return await _preprocess_diffs(
-        committer_id, committer_name, stg_conn, main_conn, sem
-    )
+    (committer_id,) = row
+    return await _preprocess_diffs(committer_id, stg_conn, main_conn, sem)
 
 
 # Main async -------------------------------------------------------------------
@@ -323,7 +321,7 @@ async def _run_preprocessing():
         log.info("Starting preprocessing for %d committers.", len(rows_to_process))
         global_sem = asyncio.Semaphore(CONCUR)
         tasks = [
-            _bounded_preprocess_diffs(row, stg_conn, main_conn, global_sem)
+            _bounded_preprocess_diffs((row[0],), stg_conn, main_conn, global_sem)
             for row in rows_to_process
         ]
         results = await asyncio.gather(*tasks)
