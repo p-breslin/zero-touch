@@ -87,7 +87,7 @@ def _insert_inference_info(
     rows: List[Tuple[str, Optional[str], Optional[str]]],
 ):
     """
-    Inserts commit summaries into INFERENCE_INFO table. Each row is (GITHUB_ID, GITHUB_DISPLAY_NAME, DIFF_SUMMARIES as JSON string).
+    Inserts commit summaries into INFERENCE_INFO table. Each row is (GITHUB_ID and DIFF_SUMMARIES as JSON string).
     """
     if not rows:
         log.debug("No inference info rows to insert.")
@@ -96,27 +96,21 @@ def _insert_inference_info(
     conn.execute(f"""
         CREATE TABLE IF NOT EXISTS {T_OUTPUT} (
             GITHUB_ID TEXT PRIMARY KEY,
-            GITHUB_DISPLAY_NAME TEXT,
             DIFF_SUMMARIES TEXT -- JSON string of structured summaries
         );
     """)
 
     conn.executemany(
         f"""
-        INSERT INTO {T_OUTPUT} (GITHUB_ID, GITHUB_DISPLAY_NAME, DIFF_SUMMARIES)
+        INSERT INTO {T_OUTPUT} (GITHUB_ID, DIFF_SUMMARIES)
         VALUES (?, ?, ?)
         ON CONFLICT (GITHUB_ID) DO UPDATE SET
-            GITHUB_DISPLAY_NAME = excluded.GITHUB_DISPLAY_NAME,
             DIFF_SUMMARIES = excluded.DIFF_SUMMARIES;
         """,
         rows,
     )
     conn.commit()
     log.info("Inserted inference info for %d users", len(rows))
-
-
-def extract_path_roots(paths: set[str]) -> List[str]:
-    return list({p.split("/")[0] for p in paths if "/" in p})
 
 
 def get_review_comment_count(conn, user_id: str) -> int:
@@ -143,7 +137,7 @@ def _load_committers_for_preprocessing(
 
     if T_OUTPUT in tables:
         q = f"""
-            SELECT DISTINCT COMMITTER_ID, COMMITTER_NAME
+            SELECT DISTINCT COMMITTER_ID
             FROM   {T_COMMITTER_DIFFS_SOURCE}
             WHERE  COMMITTER_ID NOT IN (SELECT COMMITTER_ID FROM {T_OUTPUT})
               AND COMMITTER_ID IS NOT NULL
@@ -151,7 +145,7 @@ def _load_committers_for_preprocessing(
         """
     else:
         q = f"""
-            SELECT DISTINCT COMMITTER_ID, COMMITTER_NAME
+            SELECT DISTINCT COMMITTER_ID
             FROM   {T_COMMITTER_DIFFS_SOURCE}
             WHERE  COMMITTER_ID IS NOT NULL
             LIMIT  {limit};
@@ -237,7 +231,7 @@ async def _preprocess_diffs(
                     loc_added=commit["additions"],
                     loc_removed=commit["deletions"],
                     file_count=len(commit["file_paths"]),
-                    path_roots=extract_path_roots(commit["file_paths"]),
+                    path_roots=commit["file_paths"],
                 )
 
         tasks = [_task(commit) for commit in filtered_commits]
