@@ -91,7 +91,7 @@ class IssueInfo(BaseModel):
     )
 
 
-class PreprocessedDiffOutput(BaseModel):
+class InferenceOutput(BaseModel):
     """Top-level user-level summary of all commit contributions."""
 
     last_90d_commits: int = Field(
@@ -114,23 +114,26 @@ class PreprocessedDiffOutput(BaseModel):
 
 class DeveloperInfo(BaseModel):
     analysis: str = Field(
-        description="A brief summary of observations from the code changes, including types of files modified, nature of changes, and notable patterns based on the structured contribution input."
+        description="A brief summary of observations from the code changes, including types of files modified, nature of changes, and notable patterns based on the structured contribution input and project interactions."
     )
     role: Literal[
         "Front End Developer",
         "Back End Developer",
+        "Full Stack Developer",
         "AI Engineer",
         "DevOps Engineer",
+        "Data Scientist",
+        "Technical Architect",
         "Inconclusive",
     ] = Field(
-        description="The determined primary role of the developer based on the structured analysis of their code contributions."
+        description="The determined primary role of the developer based on structured analysis of their code contributions and JIRA interactions."
     )
-    experience_level: Literal["Junior", "Mid-level", "Senior", "Inconclusive"] = Field(
-        description="The determined experience level of the developer based on the complexity, scope, and nature of their structured code contributions."
+    experience_level: Literal["Junior", "Mid-level", "Senior"] = Field(
+        description="Determined experience level based on the complexity, autonomy, and scope demonstrated by their structured code contributions and project interactions."
     )
     skills: List[str] = Field(
         default_factory=list,
-        description="A list of specific technologies, languages, frameworks, or tools demonstrated and identified from the structured contributions.",
+        description="A list of specific technologies, languages, frameworks, or tools demonstrated and identified from the structured contributions and/or project interactions.",
     )
     justification: str = Field(
         description="Detailed explanation for the conclusions on role, experience level, and skills, referencing patterns and summaries from the structured input contributions."

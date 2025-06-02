@@ -3,7 +3,7 @@ from .inference_models import (
     GeneratedCommitSummary,
     PreprocessedCommitSummary,
     IssueInfo,
-    PreprocessedDiffOutput,
+    InferenceOutput,
     DeveloperInfo,
 )
 
@@ -13,6 +13,6 @@ __all__ = [
     "GeneratedCommitSummary",
     "PreprocessedCommitSummary",
     "IssueInfo",
-    "PreprocessedDiffOutput",
+    "InferenceOutput",
     "DeveloperInfo",
 ]
