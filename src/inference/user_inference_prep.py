@@ -19,19 +19,23 @@ from models import (
 )
 
 """
-Preprocesses individual commit diffs into structured summaries using AI agents.
+Preprocesses developer commit activity into structured summaries with contextual enrichment.
 
 Description
 -----------
-Generates structured summaries of individual commits for each committer by analyzing commit message and diff content. Pulls commits directly from the GITHUB_DIFFS table instead of relying on aggregated diffs. Each commit is summarized into change description, technologies used, and metadata. Results are stored in the INFERENCE_INFO table as JSON strings.
+Analyzes recent commits for each GitHub user and generates structured summaries using AI agents. Each committer's data is augmented with review comment activity and linked JIRA issues to support downstream developer profiling. Results are stored in the INFERENCE_INFO table as JSON strings.
 
-    1. Loads distinct committers from GITHUB_DIFFS who are not yet in INFERENCE_INFO.
-    2. For each committer, retrieves their individual commit messages and diffs.
-    3. Sends each commit to an gent for summarization.
-    4. Builds a PreprocessedDiffOutput object containing summaries, key changes, languages, and file metadata.
-    5. Serializes the structured output and stores it in the database.
+    1. Loads distinct committers from GITHUB_DIFFS.
+    2. For each committer:
+        - Retrieves raw commits (message, diff, file metadata).
+        - Filters commits by a total diff character budget.
+        - Sends commits to concurrent agents for summarization.
+    3. Retrieves associated JIRA issues via MATCHED_USERS and JIRA_ISSUES.
+    4. Counts authored PR review comments from REVIEW_COMMENTS in MAIN_DB.
+    5. Constructs a PreprocessedDiffOutput containing commit summaries, technologies used, issue context, and review activity.
+    6. Serializes the result and inserts it into the INFERENCE_INFO table.
 
-Includes developer review activity by counting authored comments in REVIEW_COMMENTS. Supports asynchronous execution with concurrency limits.
+Commits are grouped by SHA and collapsed across files. Summaries include metadata such as LOC added/removed, file count, and top-level paths.
 """
 
 
@@ -129,9 +133,8 @@ def get_review_comment_count(conn, user_id: str) -> int:
         SELECT COUNT(*) FROM XFLOW_DEV_GITHUB_.REVIEW_COMMENTS
         WHERE json_extract_string(USER, '$.id') = ?
     """
-    with db_manager(MAIN_DB) as conn:
-        result = conn.execute(q, (user_id,)).fetchone()
-        return result[0] if result else 0
+    result = conn.execute(q, (user_id,)).fetchone()
+    return result[0] if result else 0
 
 
 def _load_committers_for_preprocessing(
@@ -262,7 +265,7 @@ async def _preprocess_diffs(
                 )
                 if not agent_summary:
                     return None
-                log.info("An agent returned a Commit Summary. Prcocessing..")
+                log.info("An agent returned a Commit Summary. Processing..")
                 return PreprocessedCommitSummary(
                     commit_message=commit["message"],
                     summary=agent_summary.summary,
@@ -290,7 +293,8 @@ async def _preprocess_diffs(
             associated_issues=associated_issues,
             commits=valid,
         )
-        return committer_id, matched[1], matched[0], output.model_dump_json()
+        jira_id, db_id = (matched[1], matched[0]) if matched else (None, None)
+        return committer_id, jira_id, db_id, output.model_dump_json()
 
     except Exception as exc:
         log.error(
@@ -350,9 +354,8 @@ async def test_single_user():
     with db_manager(STG_DB) as stg_conn, db_manager(MAIN_DB) as main_conn:
         global_sem = asyncio.Semaphore(CONCUR)
         results = await _preprocess_diffs("49854264", stg_conn, main_conn, global_sem)
-        print(results)
         valid_results = [res for res in results if res and res[3]]
-        _insert_inference_info(stg_conn, [valid_results])
+        _insert_inference_info(stg_conn, valid_results)
 
 
 # asyncio.run(test_single_user())
