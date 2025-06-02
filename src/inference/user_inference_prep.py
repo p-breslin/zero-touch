@@ -14,6 +14,7 @@ from src.agents.agent_builder import build_agent
 from models import (
     GeneratedCommitSummary,
     PreprocessedCommitSummary,
+    IssueInfo,
     PreprocessedDiffOutput,
 )
 
@@ -41,6 +42,8 @@ log = logging.getLogger(__name__)
 
 T_COMMITTER_DIFFS_SOURCE = "GITHUB_DIFFS"
 T_OUTPUT = "INFERENCE_INFO"
+T_USERS = "MATCHED_USERS"
+T_ISSUES = "JIRA_ISSUES"
 
 STG_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_STAGING_NAME']}.duckdb")
 MAIN_DB = Path(DATA_DIR, f"{os.getenv('DUCKDB_NAME')}.duckdb")
@@ -84,10 +87,10 @@ def _load_commits_for_user(conn, user_id: str) -> List[Dict[str, Any]]:
 
 def _insert_inference_info(
     conn,
-    rows: List[Tuple[str, Optional[str], Optional[str]]],
+    rows: List[Tuple[str, Optional[str], Optional[str], Optional[str]]],
 ):
     """
-    Inserts commit summaries into INFERENCE_INFO table. Each row is (GITHUB_ID and DIFF_SUMMARIES as JSON string).
+    Inserts commit summaries into INFERENCE_INFO table. Each row is (GITHUB_ID and SUMMARIES as JSON string).
     """
     if not rows:
         log.debug("No inference info rows to insert.")
@@ -96,16 +99,20 @@ def _insert_inference_info(
     conn.execute(f"""
         CREATE TABLE IF NOT EXISTS {T_OUTPUT} (
             GITHUB_ID TEXT PRIMARY KEY,
-            DIFF_SUMMARIES TEXT -- JSON string of structured summaries
+            JIRA_ID TEXT,
+            DB_ID TEXT,
+            SUMMARIES TEXT
         );
     """)
 
     conn.executemany(
         f"""
-        INSERT INTO {T_OUTPUT} (GITHUB_ID, DIFF_SUMMARIES)
-        VALUES (?, ?, ?)
+        INSERT INTO {T_OUTPUT} (GITHUB_ID, JIRA_ID, DB_ID, SUMMARIES)
+        VALUES (?, ?, ?, ?)
         ON CONFLICT (GITHUB_ID) DO UPDATE SET
-            DIFF_SUMMARIES = excluded.DIFF_SUMMARIES;
+            SUMMARIES = excluded.SUMMARIES,
+            JIRA_ID = excluded.JIRA_ID,
+            DB_ID = excluded.DB_ID;
         """,
         rows,
     )
@@ -131,7 +138,7 @@ def _load_committers_for_preprocessing(
     conn, limit: int
 ) -> List[Tuple[str, Optional[str]]]:
     """
-    Loads distinct committers from GITHUB_DIFFS who have not yet been preprocessed. Skips those already in PREPROCESSED_DIFFS.
+    Loads distinct committers from GITHUB_DIFFS who have not yet been preprocessed.
     """
     tables = {row[0] for row in conn.execute("SHOW TABLES").fetchall()}
 
@@ -174,18 +181,52 @@ async def _summarize_commit(
 
 async def _preprocess_diffs(
     committer_id: str,
-    committer_name: Optional[str],
     stg_conn,
     main_conn,
     sem: asyncio.Semaphore,
-) -> Tuple[str, Optional[str], Optional[str]]:
+) -> Tuple[str, Optional[str], Optional[str], Optional[str]]:
     try:
         raw_commits = _load_commits_for_user(stg_conn, committer_id)
         if not raw_commits:
             log.warning(f"No commits found for committer {committer_id}.")
-            return committer_id, committer_name, None
+            return committer_id, None, None, None
 
+        # Get number of PR review comments
         pr_review_comments = get_review_comment_count(main_conn, committer_id)
+
+        # Enrich with associated JIRA issues
+        matched = stg_conn.execute(
+            f"""
+            SELECT DB_ID, JIRA_ID FROM {T_USERS}
+            WHERE GITHUB_ID = ?
+            """,
+            (committer_id,),
+        ).fetchone()
+
+        associated_issues: Dict[str, IssueInfo] = {}
+
+        if matched:
+            _, jira_id = matched
+            issue_rows = stg_conn.execute(
+                """
+                SELECT ISSUE_KEY, ISSUE_TYPE_NAME, SUMMARY, DESCRIPTION, PROJECT_KEY, PROJECT_NAME
+                FROM JIRA_ISSUES
+                WHERE ASSIGNEE_ACCOUNT_ID = ?
+                """,
+                (jira_id,),
+            ).fetchall()
+
+            for row in issue_rows:
+                issue_key = row[0]
+                associated_issues[issue_key] = IssueInfo(
+                    issue_type=row[1],
+                    summary=row[2],
+                    description=row[3],
+                    project_key=row[4],
+                    project_name=row[5],
+                )
+        else:
+            log.warning(f"No MATCHED_USERS entry for committer: {committer_id}")
 
         # Budgeted filtering logic
         MAX_TOTAL_DIFF_CHARS = 100000
@@ -212,7 +253,7 @@ async def _preprocess_diffs(
 
         if not filtered_commits:
             log.warning(f"No commits within budget for committer {committer_id}.")
-            return committer_id, committer_name, None
+            return committer_id, None, None, None
 
         async def _task(commit):
             async with sem:
@@ -231,7 +272,7 @@ async def _preprocess_diffs(
                     loc_added=commit["additions"],
                     loc_removed=commit["deletions"],
                     file_count=len(commit["file_paths"]),
-                    path_roots=commit["file_paths"],
+                    file_path=commit["file_paths"],
                 )
 
         tasks = [_task(commit) for commit in filtered_commits]
@@ -240,15 +281,16 @@ async def _preprocess_diffs(
 
         if not valid:
             log.warning(f"No valid commit summaries for committer {committer_id}.")
-            return committer_id, committer_name, None
+            return committer_id, None, None, None
 
         log.info("Perparing the Preprocessed Diff Output..")
         output = PreprocessedDiffOutput(
             last_90d_commits=total_commit_count,
             pr_review_comments=pr_review_comments,
+            associated_issues=associated_issues,
             commits=valid,
         )
-        return committer_id, committer_name, output.model_dump_json()
+        return committer_id, matched[1], matched[0], output.model_dump_json()
 
     except Exception as exc:
         log.error(
@@ -257,13 +299,13 @@ async def _preprocess_diffs(
             exc,
             exc_info=True,
         )
-        return committer_id, committer_name, None
+        return committer_id, None, None, None
 
 
 # Concurrency helper -----------------------------------------------------------
 async def _bounded_preprocess_diffs(
     row: Tuple[str, Optional[str]], stg_conn, main_conn, sem: asyncio.Semaphore
-) -> Tuple[str, Optional[str], Optional[str]]:
+) -> Tuple[str, Optional[str], Optional[str], Optional[str]]:
     committer_id, committer_name = row
     return await _preprocess_diffs(
         committer_id, committer_name, stg_conn, main_conn, sem
@@ -287,19 +329,19 @@ async def _run_preprocessing():
         results = await asyncio.gather(*tasks)
 
         # Filter out None and empty results
-        valid_results = [res for res in results if res and res[2]]
+        valid_results = [res for res in results if res and res[3]]
         _insert_inference_info(stg_conn, valid_results)
 
 
 # Entry point ------------------------------------------------------------------
 def main():
     log.info(
-        "Starting committer diff preprocessing script (limit=%d, concur=%d)",
+        "Collecting relevant information for user inference (limit=%d, concur=%d)",
         LIMIT,
         CONCUR,
     )
     asyncio.run(_run_preprocessing())
-    log.info("Finished committer diff preprocessing.")
+    log.info("Finished.")
 
 
 if __name__ == "__main__":
@@ -309,11 +351,9 @@ if __name__ == "__main__":
 async def test_single_user():
     with db_manager(STG_DB) as stg_conn, db_manager(MAIN_DB) as main_conn:
         global_sem = asyncio.Semaphore(CONCUR)
-        results = await _preprocess_diffs(
-            "161881863", "Michael Gebis", stg_conn, main_conn, global_sem
-        )
+        results = await _preprocess_diffs("49854264", stg_conn, main_conn, global_sem)
         print(results)
-        valid_results = [res for res in results if res and res[2]]
+        valid_results = [res for res in results if res and res[3]]
         _insert_inference_info(stg_conn, [valid_results])
 
 
