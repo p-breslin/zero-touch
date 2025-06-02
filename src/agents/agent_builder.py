@@ -14,7 +14,7 @@ from models import (
     GeneratedCommitSummary,
     PreprocessedCommitSummary,
     IssueInfo,
-    PreprocessedDiffOutput,
+    InferenceOutput,
     DeveloperInfo,
 )
 
@@ -24,7 +24,7 @@ MAPPINGS = {
     "GeneratedCommitSummary": GeneratedCommitSummary,
     "PreprocessedCommitSummary": PreprocessedCommitSummary,
     "IssueInfo": IssueInfo,
-    "PreprocessedDiffOutput": PreprocessedDiffOutput,
+    "InferenceOutput": InferenceOutput,
     "DeveloperInfo": DeveloperInfo,
 }
 
@@ -56,6 +56,7 @@ def build_agent(
     description = cfg.get("description", None)
     prompt_key = cfg.get("prompt_key", None)
     response_model = cfg.get("response_model", None)
+    use_json_mode = cfg.get("use_json_mode", False)
     reasoning = cfg.get("reasoning", False)
     reasoning_model_id = cfg.get("reasoning_model_id", None)
     thinking_tools = cfg.get("thinking_tools", None)
@@ -94,6 +95,7 @@ def build_agent(
         description=description,
         instructions=instructions,
         response_model=response_model,
+        use_json_mode=use_json_mode,
         session_state=session_state,
         knowledge=knowledge_base,
         reasoning=reasoning,

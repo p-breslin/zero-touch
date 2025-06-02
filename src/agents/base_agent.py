@@ -18,6 +18,7 @@ def build_base_agent(
     instructions: Optional[List[str]] = None,
     # Output structure & initial state
     response_model: Optional[Type[BaseModel]] = None,
+    use_json_mode: Optional[bool] = False,
     session_state: Optional[Dict[str, Any]] = None,
     # Advanced capabilities
     knowledge: Optional[AgentKnowledge] = None,
@@ -41,6 +42,7 @@ def build_base_agent(
         instructions: List of specific instructions for the agent to follow.
 
         response_model: Optional Pydantic model to structure and validate the agent's output.
+        use_json_mode: When the model doesn't support structured outputs.
         session_state: Optional dict for the agent's initial session state.
 
         knowledge: An optional AgentKnowledge instance for RAG capabilities.
@@ -65,6 +67,7 @@ def build_base_agent(
         description=description,
         instructions=instructions,
         response_model=response_model,
+        use_json_mode=use_json_mode,
         session_state=session_state,
         knowledge=knowledge,
         reasoning=reasoning,
