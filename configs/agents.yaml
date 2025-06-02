@@ -38,11 +38,26 @@ Diff_Preprocessor:
 
 Developer_Inference:
   description: >
-    An AI assistant that analyzes pre-processed, structured summaries of a developer'sccode contributions (commits and file changes) to infer their primary functional role,cexperience level, and key technical skills, providing a detailed justification.
+    An AI assistant that analyzes pre-processed, structured summaries of a developer's code contributions (commits and file changes) to infer their primary functional role,cexperience level, and key technical skills, providing a detailed justification.
   provider: "openai"
-  model_id: "gpt-4.1"
+  model_id: "gpt-4.1-nano"
   prompt_key: "Developer_Inference"
   response_model: "DeveloperInfo"
   thinking: true
   temperature: 0.2
-  debug_mode: false
+  debug_mode: true
+
+# ------------------------------------------------------------------------------
+
+Developer_Inference_gemini:
+  description: >
+    An AI assistant that analyzes pre-processed, structured summaries of a developer's code contributions (commits and file changes) to infer their primary functional role,cexperience level, and key technical skills, providing a detailed justification.
+  provider: "google"
+  model_id: "gemini-2.5-flash-preview-05-20"
+  prompt_key: "Developer_Inference"
+  thinking: true
+  temperature: 0.2
+  debug_mode: true
+  use_json_mode: true
+# gemini-2.5-flash-preview-05-20
+# gemini-2.0-flash
