@@ -13,7 +13,8 @@ from utils.logging_setup import setup_logging
 load_dotenv()
 setup_logging()
 log = logging.getLogger(__name__)
-DB_PATH = Path(DATA_DIR, f"{os.getenv('DUCKDB_STAGING_NAME')}.duckdb")
+# DB_PATH = Path(DATA_DIR, f"{os.getenv('DUCKDB_STAGING_NAME')}.duckdb")
+DB_PATH = Path(DATA_DIR, f"{os.getenv('LIVE_DB_NAME')}.duckdb")
 CSV_PATH = Path(DATA_DIR, "ACTIVE_USERS.csv")
 TABLE_NAME = "JIRA_ACTIVE_USERS"
 
