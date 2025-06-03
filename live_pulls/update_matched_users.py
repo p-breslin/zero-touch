@@ -35,8 +35,16 @@ T_PRS = "PR_USERS_JIRA"
 def patch_github_fields():
     with db_manager(DB_PATH) as conn:
         log.info(
-            "Updating GITHUB_ID and GITHUB_LOGIN in MATCHED_USERS via PR_USERS_JIRA"
+            "Checking how many MATCHED_USERS rows need patching via PR_USERS_JIRA..."
         )
+
+        # Count patchable rows
+        count = conn.execute(f"""
+            SELECT COUNT(*) FROM "{T_USERS}" u
+            JOIN "{T_PRS}" j ON u.JIRA_ID = j.JIRA_ID
+            WHERE u.GITHUB_ID IS NULL
+        """).fetchone()[0]
+        log.info("Found %d users to patch.", count)
 
         conn.execute(f"""
             UPDATE "{T_USERS}"
