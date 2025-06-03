@@ -8,9 +8,9 @@ from agno.agent import RunResponse
 from typing import List, Tuple, Optional, Dict, Any
 
 from scripts.paths import DATA_DIR
-from utils.helpers import db_manager
 from utils.logging_setup import setup_logging
 from src.agents.agent_builder import build_agent
+from utils.helpers import db_manager, validate_output
 from models import (
     GeneratedCommitSummary,
     PreprocessedCommitSummary,
@@ -49,10 +49,11 @@ T_OUTPUT = "INFERENCE_INFO"
 T_USERS = "MATCHED_USERS"
 T_ISSUES = "JIRA_ISSUES"
 
-STG_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_STAGING_NAME']}.duckdb")
+# STG_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_STAGING_NAME']}.duckdb")
+STG_DB = Path(DATA_DIR, f"{os.getenv('LIVE_DB_NAME')}.duckdb")
 MAIN_DB = Path(DATA_DIR, f"{os.getenv('DUCKDB_NAME')}.duckdb")
 
-LIMIT = int(os.getenv("PREPROCESS_LIMIT", 1000))
+LIMIT = int(os.getenv("PREPROCESS_LIMIT", 100))
 CONCUR = int(os.getenv("PREPROCESS_CONCURRENCY", 10))
 AGENT_KEY = "Diff_Preprocessor"
 
@@ -171,9 +172,12 @@ async def _summarize_commit(
     try:
         agent = build_agent(AGENT_KEY)
         message = f"=== Commit message ===\n{commit_msg}\n\n=== Diff ===\n{diff_text}"
-        resp: RunResponse = await agent.arun(message=message)
+        resp: RunResponse = await agent.arun(message)
 
-        if resp and isinstance(resp.content, GeneratedCommitSummary):
+        if "gemini" in AGENT_KEY:
+            return validate_output(resp.content, GeneratedCommitSummary)
+
+        elif resp and isinstance(resp.content, GeneratedCommitSummary):
             return resp.content
         else:
             log.warning("Unexpected or empty response from commit summarizer.")
