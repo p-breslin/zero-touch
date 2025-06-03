@@ -1,6 +1,5 @@
 from __future__ import annotations
 import os
-import json
 import asyncio
 import logging
 from pathlib import Path
@@ -12,7 +11,7 @@ from scripts.paths import DATA_DIR
 from utils.logging_setup import setup_logging
 from src.agents.agent_builder import build_agent
 from models import InferenceOutput, DeveloperInfo
-from utils.helpers import db_manager, validate_output
+from utils.helpers import db_manager, validate_output, pydantic_to_gemini
 
 """
 Infers developer profiles from structured commit summaries using AI agents.
@@ -41,11 +40,6 @@ LIMIT = int(os.getenv("PROFILE_INFER_LIMIT", 100))
 CONCUR = int(os.getenv("PROFILE_INFER_CONCURRENCY", 5))
 # AGENT_KEY = "Developer_Inference"
 AGENT_KEY = "Developer_Inference_gemini"
-
-
-# Helpers ----------------------------------------------------------------------
-def pydantic_to_gemini(output_model: InferenceOutput) -> str:
-    return json.dumps(output_model.model_dump(), ensure_ascii=False, indent=None)
 
 
 # Load committers with data ----------------------------------------------------
