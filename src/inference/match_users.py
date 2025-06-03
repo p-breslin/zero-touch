@@ -14,26 +14,16 @@ from scripts.paths import DATA_DIR
 from utils.logging_setup import setup_logging
 
 """
-Resolves users between JIRA and GitHub sources using multi-pass matching.
+Resolves users between JIRA and GitHub sources using a multi-stage matching approach:
 
-Description
------------
-Links user identities between JIRA and GitHub datasets by comparing primary fields and known aliases, then writes resolved matches to a single output table. Applies increasingly flexible matching strategies to maximize match confidence:
+    1. Exact email match (including alias emails).
+    2. Substring-based name match:
+       - If the “cleaned” JIRA display_name (letters+digits only, lowercase)
+         is a prefix of the “cleaned” GitHub display_name (or vice versa),
+         accept with high confidence (0.95 if GitHub contains JIRA, 0.85 if JIRA contains GitHub).
+    3. Blocked name-based match: For each remaining JIRA/GitHub pair within the same “block” (first three letters of the first token of display_name), compute a combined similarity (max of Jaccard token overlap and fuzzy token_set_ratio). If that >= 0.85, accept.
 
-    1. Email match: matches users based on exact normalized email addresses.
-    2. Name token overlap: uses Jaccard similarity on tokenized display names and logins.
-    3. Pattern match: checks login strings against generated name-based patterns.
-    4. Fuzzy string match: applies token set ratio between cleaned display names and logins.
-
-Each match is scored and tagged with the chosen method and confidence. Users are matched one-to-one based on the best available match and inserted into the MATCHED_USERS table. Unmatched users from each system are saved to separate tables: UNMATCHED_GITHUB_USERS and UNMATCHED_JIRA_USERS.
-
-Steps
------
-1. Normalizes emails, cleans names, and expands alias fields.
-2. Evaluates matches across all four tiers of logic.
-3. Deduplicates and selects highest-confidence matches.
-4. Writes matched results to MATCHED_USERS.
-5. Writes unmatched JIRA and GitHub users to respective staging tables.
+Each match is tagged with METHOD_1_EMAIL, METHOD_SUBSTRING, or METHOD_NAME_SIM. We then perform a greedy 1:1 selection by descending confidence and a small tier ranking. Final matched pairs are written to MATCHED_USERS; unmatched rows go to UNMATCHED_GITHUB_USERS and UNMATCHED_JIRA_USERS.
 """
 
 # Configuration ---------------------------------------------------------------
@@ -41,10 +31,12 @@ load_dotenv()
 setup_logging()
 log = logging.getLogger(__name__)
 
-DB_PATH = Path(DATA_DIR, f"{os.getenv('DUCKDB_STAGING_NAME')}.duckdb")
+DB_PATH = Path(DATA_DIR, f"{os.getenv('LIVE_DB_NAME')}.duckdb")
 T_JIRA = "JIRA_ACTIVE_USERS"
 T_GH = "GITHUB_ACTIVE_USERS"
 T_TARGET = "MATCHED_USERS"
+T_UNMATCHED_GH = "UNMATCHED_GITHUB_USERS"
+T_UNMATCHED_JIRA = "UNMATCHED_JIRA_USERS"
 
 DDL = f"""
 CREATE OR REPLACE TABLE {T_TARGET} (
@@ -70,47 +62,6 @@ def normalize_email(e: Optional[str]) -> Optional[str]:
     return e.lower().strip() if isinstance(e, str) else None
 
 
-def tokenize(t: Optional[str]) -> set[str]:
-    if not t:
-        return set()
-    parts = re.split(r"[.\\s_\\-]+", t.lower())
-    return {re.sub(r"[^a-z0-9]", "", p) for p in parts if len(p) > 1}
-
-
-def jaccard(a: set[str], b: set[str]) -> float:
-    return len(a & b) / len(a | b) if a and b else 0.0
-
-
-def patterns(name: str) -> set[str]:
-    if not name:
-        return set()
-    parts = [re.sub(r"[^a-z]", "", p.lower()) for p in name.split()]
-    out: set[str] = set()
-    if parts:
-        out.add(parts[0])
-        if len(parts) > 1:
-            out |= {
-                parts[-1],
-                parts[0] + parts[-1],
-                parts[-1] + parts[0],
-                parts[0][0] + parts[-1],
-                parts[0] + parts[-1][0],
-                parts[0][0] + parts[0],
-            }
-            if len(parts) > 2:
-                out.add(parts[0][0] + parts[1])
-    return {p for p in out if len(p) > 2}
-
-
-def clean(s: Optional[str]) -> str:
-    return re.sub(r"\\s+", " ", re.sub(r"[^a-z0-9]", " ", (s or "").lower())).strip()
-
-
-def make_db_id(jira_id: Optional[str], gh_id: Optional[str]) -> str:
-    digest = hashlib.sha1(f"{jira_id}|{gh_id}".encode()).hexdigest()
-    return digest[:20]
-
-
 def listify(x: Any) -> list[str]:
     if isinstance(x, list):
         return x
@@ -123,14 +74,68 @@ def listify(x: Any) -> list[str]:
     return []
 
 
+def tokenize(t: Optional[str]) -> set[str]:
+    if not t:
+        return set()
+    parts = re.findall(r"[a-z0-9]+", re.sub(r"[^a-zA-Z0-9]", "", t.lower()))
+    camel = re.sub(r"([a-z])([A-Z])", r"\1 \2", t)
+    camel_parts = re.split(r"[.\s_\-]+", camel.lower())
+    return {re.sub(r"[^a-z0-9]", "", p) for p in parts + camel_parts if len(p) > 1}
+
+
+def jaccard(a: set[str], b: set[str]) -> float:
+    return len(a & b) / len(a | b) if a and b else 0.0
+
+
+def clean_text(s: Optional[str]) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]", " ", (s or "").lower())).strip()
+
+
+def make_db_id(jira_id: Optional[str], gh_id: Optional[str]) -> str:
+    digest = hashlib.sha1(f"{jira_id}|{gh_id}".encode()).hexdigest()
+    return digest[:20]
+
+
+def block_key(name: Optional[str]) -> str:
+    """
+    Blocking key: first three letters of the first token (lowercased), or "" if no tokens.
+    """
+    if not name:
+        return ""
+    tokens = re.findall(r"[a-zA-Z]+", name.lower())
+    if not tokens:
+        return ""
+    return tokens[0][:3]
+
+
+def name_similarity(a: Optional[str], b: Optional[str]) -> float:
+    """
+    Compute max(Jaccard(token sets), fuzzy token_set_ratio on cleaned strings) in [0..1].
+    """
+    if not a or not b:
+        return 0.0
+    toks_a = tokenize(a)
+    toks_b = tokenize(b)
+    sim_jac = jaccard(toks_a, toks_b)
+    clean_a = clean_text(a)
+    clean_b = clean_text(b)
+    sim_fuz = fuzz.token_set_ratio(clean_a, clean_b) / 100.0
+    return max(sim_jac, sim_fuz)
+
+
+def strip_to_alnum(s: Optional[str]) -> str:
+    """Strip out all non-alphanumeric characters and lowercase."""
+    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+
 # Core logic -------------------------------------------------------------------
 def resolve_users():
+    # Step 1: Load raw tables into pandas
     with duckdb.connect(DB_PATH) as cx:
-        log.info("Loading users…")
         cx.execute(DDL)
 
         jira = (
-            cx.execute("SELECT ID, DISPLAY_NAME, EMAIL FROM JIRA_ACTIVE_USERS")
+            cx.execute(f"SELECT ID, DISPLAY_NAME, EMAIL FROM {T_JIRA}")
             .fetchdf()
             .rename(
                 columns={
@@ -141,7 +146,7 @@ def resolve_users():
             )
         )
 
-        gh = cx.execute("""
+        gh = cx.execute(f"""
             SELECT
                 ID,
                 DISPLAY_NAME,
@@ -150,119 +155,266 @@ def resolve_users():
                 ALIAS_DISPLAY_NAME,
                 ALIAS_EMAIL,
                 ALIAS_LOGIN
-            FROM GITHUB_ACTIVE_USERS
+            FROM {T_GH}
         """).fetchdf()
 
+    # Normalize JIRA emails
     jira["EMAIL_NORM"] = jira["JIRA_EMAIL"].apply(normalize_email)
+
+    # Normalize GitHub primary email + parse alias arrays
     gh["EMAIL_NORM"] = gh["EMAIL"].apply(normalize_email)
     gh["ALIAS_EMAIL"] = gh["ALIAS_EMAIL"].apply(listify)
     gh["ALIAS_DISPLAY_NAME"] = gh["ALIAS_DISPLAY_NAME"].apply(listify)
     gh["ALIAS_LOGIN"] = gh["ALIAS_LOGIN"].apply(listify)
 
-    candidate_matches = []
+    candidate_matches: list[dict[str, Any]] = []
 
-    for _, j in jira.iterrows():
-        j_tokens = tokenize(j["JIRA_DISPLAY_NAME"])
-        j_email = j["EMAIL_NORM"]
-        j_clean = clean(j["JIRA_DISPLAY_NAME"])
-        j_id = j["JIRA_ID"]
+    # Step 2: Exact email matching (including alias emails)
+    gh_email_records: list[dict[str, Any]] = []
+    for _, row in gh.iterrows():
+        gh_id = row["ID"]
+        primary_email = row["EMAIL_NORM"]
+        if primary_email:
+            gh_email_records.append({"GITHUB_ID": gh_id, "EMAIL_NORM": primary_email})
+        for alias in row["ALIAS_EMAIL"]:
+            norm_alias = normalize_email(alias)
+            if norm_alias:
+                gh_email_records.append({"GITHUB_ID": gh_id, "EMAIL_NORM": norm_alias})
 
-        for _, g in gh.iterrows():
-            gh_id = g["ID"]
+    gh_email_df = pd.DataFrame.from_records(gh_email_records)
 
-            alias_email = listify(g["ALIAS_EMAIL"])
-            alias_login = listify(g["ALIAS_LOGIN"])
-            alias_display = listify(g["ALIAS_DISPLAY_NAME"])
-
-            email_pool = [normalize_email(g["EMAIL"])] + [
-                normalize_email(e) for e in alias_email
-            ]
-            login_pool = [g["LOGIN"]] + alias_login
-            name_pool = [g["DISPLAY_NAME"]] + alias_display
-
-            method, score = None, 0.0
-
-            if j_email and j_email in email_pool:
-                method = "TIER_1_EMAIL"
-                score = 1.0
-            elif any(
-                jaccard(j_tokens, tokenize(n)) >= 0.5 for n in name_pool + login_pool
-            ):
-                method = "TIER_2_JACCARD"
-                score = 0.5
-            elif any(
-                all(((lp or "").lower().startswith(p), len(p) > 2))
-                or all(((lp or "").lower().endswith(p), len(p) > 2))
-                for lp in login_pool
-                for p in patterns(j["JIRA_DISPLAY_NAME"])
-            ):
-                method = "TIER_2.5_PATTERN"
-                score = 0.75
-            else:
-                best = max(
-                    fuzz.token_set_ratio(j_clean, clean(n))
-                    for n in name_pool + login_pool
-                )
-                if best >= 90:
-                    method = "TIER_3_FUZZY"
-                    score = round(best / 100, 2)
-
-            if method:
-                candidate_matches.append(
-                    dict(
-                        DB_ID=make_db_id(j_id, gh_id),
-                        JIRA_ID=j_id,
-                        GITHUB_ID=gh_id,
-                        JIRA_DISPLAY_NAME=j["JIRA_DISPLAY_NAME"],
-                        JIRA_EMAIL=j["JIRA_EMAIL"],
-                        GITHUB_DISPLAY_NAME=g["DISPLAY_NAME"],
-                        GITHUB_EMAIL=g["EMAIL"],
-                        GITHUB_LOGIN=g["LOGIN"],
-                        GITHUB_DISPLAY_NAME_ALIAS=alias_display,
-                        GITHUB_EMAIL_ALIAS=alias_email,
-                        GITHUB_LOGIN_ALIAS=alias_login,
-                        MATCHING_METHOD=method,
-                        MATCH_CONFIDENCE=score,
-                    )
-                )
-
-    df_all = pd.DataFrame(candidate_matches)
-    df_all.sort_values(by="MATCH_CONFIDENCE", ascending=False, inplace=True)
-    df_best = df_all.drop_duplicates(subset=["JIRA_ID"], keep="first").drop_duplicates(
-        subset=["GITHUB_ID"], keep="first"
+    exact_merge = pd.merge(
+        jira,
+        gh_email_df,
+        on="EMAIL_NORM",
+        how="inner",
+        suffixes=("_jira", "_gh"),
     )
 
+    if not exact_merge.empty:
+        exact_full = pd.merge(
+            exact_merge,
+            gh,
+            left_on="GITHUB_ID",
+            right_on="ID",
+            how="left",
+            suffixes=("_jira", "_gh_full"),
+        )
+
+        for _, row in exact_full.iterrows():
+            j_id = row["JIRA_ID"]
+            g_id = row["GITHUB_ID"]
+            candidate_matches.append(
+                {
+                    "DB_ID": make_db_id(j_id, g_id),
+                    "JIRA_ID": j_id,
+                    "GITHUB_ID": g_id,
+                    "JIRA_DISPLAY_NAME": row["JIRA_DISPLAY_NAME"],
+                    "JIRA_EMAIL": row["JIRA_EMAIL"],
+                    "GITHUB_DISPLAY_NAME": row["DISPLAY_NAME"],
+                    "GITHUB_EMAIL": row["EMAIL"],
+                    "GITHUB_LOGIN": row["LOGIN"],
+                    "GITHUB_DISPLAY_NAME_ALIAS": row["ALIAS_DISPLAY_NAME"],
+                    "GITHUB_EMAIL_ALIAS": row["ALIAS_EMAIL"],
+                    "GITHUB_LOGIN_ALIAS": row["ALIAS_LOGIN"],
+                    "MATCHING_METHOD": "METHOD_1_EMAIL",
+                    "MATCH_CONFIDENCE": 1.0,
+                }
+            )
+
+    matched_jira_ids = set(exact_merge["JIRA_ID"]) if not exact_merge.empty else set()
+    matched_gh_ids = set(exact_merge["GITHUB_ID"]) if not exact_merge.empty else set()
+
+    # Step 3: Remove exact-matched users
+    jira_rem = jira[~jira["JIRA_ID"].isin(matched_jira_ids)].copy()
+    gh_rem = gh[~gh["ID"].isin(matched_gh_ids)].copy()
+
+    # Step 4: Compute blocking key (first 3 letters of first token)
+    jira_rem["BLOCK"] = jira_rem["JIRA_DISPLAY_NAME"].apply(block_key)
+    gh_rem["BLOCK"] = gh_rem["DISPLAY_NAME"].apply(block_key)
+
+    # Step 5: Substring-based + name-based matching within each block
+    for block, jira_block in jira_rem.groupby("BLOCK"):
+        gh_block = gh_rem[gh_rem["BLOCK"] == block]
+        if gh_block.empty:
+            continue
+
+        for _, j in jira_block.iterrows():
+            j_id = j["JIRA_ID"]
+            j_name = j["JIRA_DISPLAY_NAME"]
+            j_email = j["JIRA_EMAIL"]
+            j_nospace = strip_to_alnum(j_name)
+
+            for _, g in gh_block.iterrows():
+                g_id = g["ID"]
+                g_display = g["DISPLAY_NAME"] or ""
+                g_login = g["LOGIN"] or ""
+                g_nospace = strip_to_alnum(g_display)
+
+                # 2a. Substring match on cleaned display_name
+                if j_nospace and g_nospace:
+                    if g_nospace.startswith(j_nospace):
+                        candidate_matches.append(
+                            {
+                                "DB_ID": make_db_id(j_id, g_id),
+                                "JIRA_ID": j_id,
+                                "GITHUB_ID": g_id,
+                                "JIRA_DISPLAY_NAME": j_name,
+                                "JIRA_EMAIL": j_email,
+                                "GITHUB_DISPLAY_NAME": g_display,
+                                "GITHUB_EMAIL": g["EMAIL"],
+                                "GITHUB_LOGIN": g_login,
+                                "GITHUB_DISPLAY_NAME_ALIAS": g["ALIAS_DISPLAY_NAME"],
+                                "GITHUB_EMAIL_ALIAS": g["ALIAS_EMAIL"],
+                                "GITHUB_LOGIN_ALIAS": g["ALIAS_LOGIN"],
+                                "MATCHING_METHOD": "METHOD_SUBSTRING",
+                                "MATCH_CONFIDENCE": 0.95,
+                            }
+                        )
+                        continue  # skip name-similarity if GitHub contains JIRA
+
+                    elif j_nospace.startswith(g_nospace):
+                        candidate_matches.append(
+                            {
+                                "DB_ID": make_db_id(j_id, g_id),
+                                "JIRA_ID": j_id,
+                                "GITHUB_ID": g_id,
+                                "JIRA_DISPLAY_NAME": j_name,
+                                "JIRA_EMAIL": j_email,
+                                "GITHUB_DISPLAY_NAME": g_display,
+                                "GITHUB_EMAIL": g["EMAIL"],
+                                "GITHUB_LOGIN": g_login,
+                                "GITHUB_DISPLAY_NAME_ALIAS": g["ALIAS_DISPLAY_NAME"],
+                                "GITHUB_EMAIL_ALIAS": g["ALIAS_EMAIL"],
+                                "GITHUB_LOGIN_ALIAS": g["ALIAS_LOGIN"],
+                                "MATCHING_METHOD": "METHOD_SUBSTRING",
+                                "MATCH_CONFIDENCE": 0.85,
+                            }
+                        )
+                        continue  # skip name-similarity if JIRA contains GitHub
+
+                # 2b. Combined Jaccard + fuzzy if no substring hit
+                sim_name = name_similarity(j_name, g_display)
+                sim_login = name_similarity(j_name, g_login)
+                best_sim = max(sim_name, sim_login)
+
+                if best_sim >= 0.85:
+                    score = round(best_sim, 2)
+                    candidate_matches.append(
+                        {
+                            "DB_ID": make_db_id(j_id, g_id),
+                            "JIRA_ID": j_id,
+                            "GITHUB_ID": g_id,
+                            "JIRA_DISPLAY_NAME": j_name,
+                            "JIRA_EMAIL": j_email,
+                            "GITHUB_DISPLAY_NAME": g_display,
+                            "GITHUB_EMAIL": g["EMAIL"],
+                            "GITHUB_LOGIN": g_login,
+                            "GITHUB_DISPLAY_NAME_ALIAS": g["ALIAS_DISPLAY_NAME"],
+                            "GITHUB_EMAIL_ALIAS": g["ALIAS_EMAIL"],
+                            "GITHUB_LOGIN_ALIAS": g["ALIAS_LOGIN"],
+                            "MATCHING_METHOD": "METHOD_NAME_SIM",
+                            "MATCH_CONFIDENCE": score,
+                        }
+                    )
+
+    # Build DataFrame of all candidates
+    df_all = pd.DataFrame(candidate_matches)
+
+    # Filter low-confidence (< 0.50) and apply tier ranking
+    if not df_all.empty:
+        df_all = df_all[df_all["MATCH_CONFIDENCE"] >= 0.50]
+
+        TIER_RANK = {
+            "METHOD_1_EMAIL": 1,
+            "METHOD_SUBSTRING": 2,
+            "METHOD_NAME_SIM": 3,
+        }
+        df_all["RANK"] = df_all["MATCHING_METHOD"].map(TIER_RANK)
+
+        df_all.sort_values(
+            by=["MATCH_CONFIDENCE", "RANK"], ascending=[False, True], inplace=True
+        )
+
+        # Greedy 1:1 selection
+        df_best_jira = df_all.drop_duplicates(subset=["JIRA_ID"], keep="first")
+        used_gh_ids = set(df_best_jira["GITHUB_ID"])
+        df_best_gh = df_all[~df_all["GITHUB_ID"].isin(used_gh_ids)].drop_duplicates(
+            subset=["GITHUB_ID"], keep="first"
+        )
+
+        df_best = pd.concat([df_best_jira, df_best_gh]).drop_duplicates(
+            subset=["JIRA_ID", "GITHUB_ID"]
+        )
+        df_best.sort_values(
+            by=["MATCH_CONFIDENCE", "RANK"], ascending=[False, True], inplace=True
+        )
+    else:
+        # No candidates: create empty DataFrame with correct columns
+        df_best = pd.DataFrame(
+            columns=[
+                "DB_ID",
+                "JIRA_ID",
+                "GITHUB_ID",
+                "JIRA_DISPLAY_NAME",
+                "JIRA_EMAIL",
+                "GITHUB_DISPLAY_NAME",
+                "GITHUB_EMAIL",
+                "GITHUB_LOGIN",
+                "GITHUB_DISPLAY_NAME_ALIAS",
+                "GITHUB_EMAIL_ALIAS",
+                "GITHUB_LOGIN_ALIAS",
+                "MATCHING_METHOD",
+                "MATCH_CONFIDENCE",
+                "RANK",
+            ]
+        )
+
+    log.info("Selected %d best matches (greedy 1:1)", len(df_best))
+
+    # Step 6: Insert matched users into DuckDB
     with duckdb.connect(DB_PATH) as cx:
         cx.execute(f"DELETE FROM {T_TARGET}")
-        cx.register("TMP_RESOLVED", df_best)
-        cx.execute(f"INSERT INTO {T_TARGET} SELECT * FROM TMP_RESOLVED")
-        log.info("Wrote %d matched users to %s", len(df_best), T_TARGET)
 
-    # Unmatched tables ---------------------------------------------------------
-    T_UNMATCHED_GH = "UNMATCHED_GITHUB_USERS"
-    T_UNMATCHED_JIRA = "UNMATCHED_JIRA_USERS"
+        if not df_best.empty:
+            to_insert = df_best.drop(columns=["RANK"], errors="ignore")
+            cx.register("TMP_RESOLVED", to_insert)
+            cx.execute(f"INSERT INTO {T_TARGET} SELECT * FROM TMP_RESOLVED")
+            log.info("Wrote %d matched users to %s", len(to_insert), T_TARGET)
+        else:
+            log.info("No matches to write to %s", T_TARGET)
 
-    gh_unmatched = gh[~gh["ID"].isin(df_best["GITHUB_ID"])].copy()
-    jira_unmatched = jira[~jira["JIRA_ID"].isin(df_best["JIRA_ID"])].copy()
+    # Step 7: Write unmatched tables
+    unmatched_gh = gh[~gh["ID"].isin(df_best["GITHUB_ID"])].copy()
+    unmatched_jira = jira[~jira["JIRA_ID"].isin(df_best["JIRA_ID"])].copy()
+
+    for col in ("EMAIL_NORM", "BLOCK"):
+        if col in unmatched_gh.columns:
+            unmatched_gh = unmatched_gh.drop(columns=[col], errors="ignore")
+        if col in unmatched_jira.columns:
+            unmatched_jira = unmatched_jira.drop(columns=[col], errors="ignore")
 
     with duckdb.connect(DB_PATH) as cx:
-        # Unmatched GitHub users
-        cx.execute(f"""
+        cx.register("gh_unmatched_tmp", unmatched_gh)
+        cx.execute(
+            f"""
             CREATE OR REPLACE TABLE {T_UNMATCHED_GH} AS
-            SELECT * FROM (SELECT * FROM gh_unmatched)
-        """)
-
-        # Unmatched JIRA users
-        cx.execute(f"""
-            CREATE OR REPLACE TABLE {T_UNMATCHED_JIRA} AS
-            SELECT * FROM (SELECT * FROM jira_unmatched)
-        """)
-
-        log.info(
-            "Wrote %d unmatched GitHub users to %s", len(gh_unmatched), T_UNMATCHED_GH
+            SELECT * FROM gh_unmatched_tmp
+        """
         )
         log.info(
-            "Wrote %d unmatched JIRA users to %s", len(jira_unmatched), T_UNMATCHED_JIRA
+            "Wrote %d unmatched GitHub users to %s", len(unmatched_gh), T_UNMATCHED_GH
+        )
+
+        cx.register("jira_unmatched_tmp", unmatched_jira)
+        cx.execute(
+            f"""
+            CREATE OR REPLACE TABLE {T_UNMATCHED_JIRA} AS
+            SELECT * FROM jira_unmatched_tmp
+        """
+        )
+        log.info(
+            "Wrote %d unmatched JIRA users to %s", len(unmatched_jira), T_UNMATCHED_JIRA
         )
 
 
