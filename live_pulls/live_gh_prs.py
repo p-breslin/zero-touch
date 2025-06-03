@@ -32,9 +32,18 @@ DDL = f"""
 CREATE TABLE IF NOT EXISTS {T_TARGET} (
     INTERNAL_ID        TEXT,
     NUMBER             INTEGER,
-    COMMIT_SHA         TEXT,
+    HEAD_COMMIT_SHA    TEXT,
+    BASE_COMMIT_SHA    TEXT,
+    MERGE_COMMIT_SHA   TEXT,
+    HEAD_LABEL         TEXT,
+    BASE_LABEL         TEXT,
     ORG                TEXT,
     REPO               TEXT,
+    HEAD_REPO          TEXT,
+    COMMIT_COUN        TEXT,
+    ADDITIONS          TEXT,
+    DELETIONS          TEXT,
+    CHANGED_FILES      TEXT,
     USER_ID            TEXT,
     USER_LOGIN         TEXT,
     ROLE_IN_PR         TEXT,
@@ -55,9 +64,18 @@ CREATE TABLE IF NOT EXISTS {T_TARGET} (
 COLS = (
     "INTERNAL_ID",
     "NUMBER",
-    "COMMIT_SHA",
+    "HEAD_COMMIT_SHA",
+    "BASE_COMMIT_SHA",
+    "MERGE_COMMIT_SHA",
+    "HEAD_LABEL",
+    "BASE_LABEL",
     "ORG",
     "REPO",
+    "HEAD_REPO",
+    "COMMIT_COUNT",
+    "ADDITIONS",
+    "DELETIONS",
+    "CHANGED_FILES",
     "USER_ID",
     "USER_LOGIN",
     "ROLE_IN_PR",
@@ -88,6 +106,8 @@ def _build_records() -> List[Dict[str, Any]]:
         return []
 
     for repo in repos:
+        if repo.archived or repo.fork:
+            continue
         try:
             for pr in repo.get_pulls(state="all", sort="updated", direction="desc"):
                 if pr.updated_at < since:
@@ -95,13 +115,23 @@ def _build_records() -> List[Dict[str, Any]]:
 
                 merged_by_id = str(pr.merged_by.id) if pr.merged_by else None
                 merged_by_login = pr.merged_by.login if pr.merged_by else None
+                head_repo = pr.head.repo.full_name if pr.head.repo else None
 
                 base = dict(
                     INTERNAL_ID=str(pr.id),
                     NUMBER=pr.number,
-                    COMMIT_SHA=None,
+                    HEAD_COMMIT_SHA=pr.head.sha,
+                    BASE_COMMIT_SHA=pr.base.sha,
+                    MERGE_COMMIT_SHA=pr.merge_commit_sha,
+                    HEAD_LABEL=pr.head.label,
+                    BASE_LABEL=pr.base.label,
                     ORG=ORG_NAME,
                     REPO=repo.name,
+                    HEAD_REPO=head_repo,
+                    COMMIT_COUNT=pr.commits,
+                    ADDITIONS=pr.additions,
+                    DELETIONS=pr.deletions,
+                    CHANGED_FILES=pr.changed_files,
                     TITLE=pr.title,
                     BODY=pr.body,
                     CREATED_AT=pr.created_at,
