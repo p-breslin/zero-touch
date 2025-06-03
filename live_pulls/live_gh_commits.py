@@ -60,21 +60,21 @@ def _build_records() -> List[Dict[str, Any]]:
 
     try:
         org = _G.get_organization(org_name)
-        repos: List[Repository] = list(org.get_repos(type="all"))
+        # Only “source” repos (no forks):
+        repos: List[Repository] = list(org.get_repos(type="sources"))
     except GithubException as exc:
         log.error("Error fetching repos from org %s: %s", org_name, exc)
         return []
 
-    log.info("Fetched %d repos in org %s.", len(repos), org_name)
+    log.info("Fetched %d non-fork repos in org %s.", len(repos), org_name)
 
     for repo in repos:
         try:
             for commit in repo.get_commits(since=cutoff):
-                c = commit.commit  # Git commit data
-                a = commit.author  # GitHub user (may be None)
-                m = commit.committer  # GitHub user (may be None)
+                c = commit.commit
+                a = commit.author
+                m = commit.committer
 
-                # Raw author/committer blobs from Git data
                 a_git = c.author or {}
                 m_git = c.committer or {}
 
