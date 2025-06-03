@@ -303,7 +303,7 @@ def process_committer(
                                 ts,
                                 committer_id,
                                 committer_login_actual,
-                                author,
+                                committer_name or author.name if author else "",
                                 details.message,
                                 file_obj.filename,
                                 additions,
