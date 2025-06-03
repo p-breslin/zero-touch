@@ -6,6 +6,7 @@ import duckdb
 import logging
 from pathlib import Path
 from typing import Any, Dict
+from pydantic import BaseModel
 from contextlib import contextmanager
 from scripts.paths import DATA_DIR, CONFIG_DIR
 
@@ -150,3 +151,7 @@ def db_manager(path: Path, *, read_only: bool = False):
         yield conn
     finally:
         conn.close()
+
+
+def pydantic_to_gemini(output_model: BaseModel) -> str:
+    return json.dumps(output_model.model_dump(), ensure_ascii=False, indent=None)
