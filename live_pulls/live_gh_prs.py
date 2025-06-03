@@ -82,7 +82,7 @@ def _build_records() -> List[Dict[str, Any]]:
 
     try:
         org = _G.get_organization(ORG_NAME)
-        repos: List[Repository] = list(org.get_repos(type="all"))
+        repos: List[Repository] = list(org.get_repos(type="sources"))
     except GithubException as exc:
         log.error("Error fetching org '%s': %s", ORG_NAME, exc)
         return []
