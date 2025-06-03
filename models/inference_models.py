@@ -33,6 +33,11 @@ class GeneratedCommitSummary(BaseModel):
 class PreprocessedCommitSummary(BaseModel):
     """Final commit-level summary. Combines agent results with metadata."""
 
+    repos: List[str] = Field(
+        ...,
+        description="List of repository names this commit touched. A commit may span multiple repos.",
+    )
+
     commit_message: str = Field(
         ..., description="The commit message as written by the developer."
     )

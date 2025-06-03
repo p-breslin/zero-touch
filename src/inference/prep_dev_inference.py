@@ -15,7 +15,7 @@ from models import (
     GeneratedCommitSummary,
     PreprocessedCommitSummary,
     IssueInfo,
-    PreprocessedDiffOutput,
+    InferenceOutput,
 )
 
 """
@@ -32,7 +32,7 @@ Analyzes recent commits for each GitHub user and generates structured summaries 
         - Sends commits to concurrent agents for summarization.
     3. Retrieves associated JIRA issues via MATCHED_USERS and JIRA_ISSUES.
     4. Counts authored PR review comments from REVIEW_COMMENTS in MAIN_DB.
-    5. Constructs a PreprocessedDiffOutput containing commit summaries, technologies used, issue context, and review activity.
+    5. Constructs a InferenceOutput containing commit summaries, technologies used, issue context, and review activity.
     6. Serializes the result and inserts it into the INFERENCE_INFO table.
 
 Commits are grouped by SHA and collapsed across files. Summaries include metadata such as LOC added/removed, file count, and top-level paths.
@@ -60,7 +60,7 @@ AGENT_KEY = "Diff_Preprocessor"
 # Database operations ----------------------------------------------------------
 def _load_commits_for_user(conn, user_id: str) -> List[Dict[str, Any]]:
     q = """
-        SELECT COMMIT_SHA, COMMIT_MESSAGE, COMMIT_TIMESTAMP, FILE_PATH, DIFF, FILE_ADDITIONS, FILE_DELETIONS
+        SELECT COMMIT_SHA, REPO, COMMIT_MESSAGE, COMMIT_TIMESTAMP, FILE_PATH, DIFF, FILE_ADDITIONS, FILE_DELETIONS
         FROM GITHUB_DIFFS
         WHERE COMMITTER_ID = ?
         ORDER BY COMMIT_TIMESTAMP DESC
@@ -69,10 +69,11 @@ def _load_commits_for_user(conn, user_id: str) -> List[Dict[str, Any]]:
 
     commits: Dict[str, Dict[str, Any]] = {}
 
-    for sha, msg, ts, path, diff, additions, deletions in rows:
+    for sha, repo, msg, ts, path, diff, additions, deletions in rows:
         if sha not in commits:
             commits[sha] = {
                 "commit_sha": sha,
+                "repos": set(),
                 "message": msg,
                 "timestamp": ts,
                 "file_paths": set(),
@@ -80,7 +81,7 @@ def _load_commits_for_user(conn, user_id: str) -> List[Dict[str, Any]]:
                 "additions": 0,
                 "deletions": 0,
             }
-
+        commits[sha]["repos"].add(repo)
         commits[sha]["file_paths"].add(path)
         commits[sha]["diffs"].append(diff)
         commits[sha]["additions"] += additions
@@ -267,6 +268,7 @@ async def _preprocess_diffs(
                     return None
                 log.info("An agent returned a Commit Summary. Processing..")
                 return PreprocessedCommitSummary(
+                    repos=list(commit["repos"]),
                     commit_message=commit["message"],
                     summary=agent_summary.summary,
                     key_changes=agent_summary.key_changes,
@@ -287,7 +289,7 @@ async def _preprocess_diffs(
             return committer_id, None, None, None
 
         log.info("Perparing the Preprocessed Diff Output..")
-        output = PreprocessedDiffOutput(
+        output = InferenceOutput(
             last_90d_commits=total_commit_count,
             pr_review_comments=pr_review_comments,
             associated_issues=associated_issues,
