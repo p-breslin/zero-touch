@@ -45,8 +45,8 @@ setup_logging()
 log = logging.getLogger(__name__)
 
 COMPANY_ORG_NAME: str = os.getenv("GITHUB_ORG_NAME")
-# DB_PATH: Path = Path(DATA_DIR, f"{os.getenv('DUCKDB_STAGING_NAME')}.duckdb")
-DB_PATH: Path = Path(DATA_DIR, f"{os.getenv('LIVE_DB_NAME')}.duckdb")
+# DB_PATH = Path(DATA_DIR, f"{os.getenv('DUCKDB_STAGING_NAME')}.duckdb")
+DB_PATH = Path(DATA_DIR, f"{os.getenv('LIVE_DB_NAME')}.duckdb")
 
 T_TARGET_DIFFS = "GITHUB_DIFFS"
 T_SOURCE_USERS = "MATCHED_USERS"

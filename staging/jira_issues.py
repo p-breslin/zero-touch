@@ -30,6 +30,7 @@ COMPANY = os.environ["COMPANY_NAME"]
 SCHEMA_JIRA = f"{COMPANY}_JIRA_"
 
 STG_DB = Path(DATA_DIR, f"{os.getenv('DUCKDB_STAGING_NAME')}.duckdb")
+DB_PATH = Path(DATA_DIR, f"{os.getenv('LIVE_DB_NAME')}.duckdb")
 MAIN_DB = Path(DATA_DIR, f"{os.getenv('DUCKDB_NAME')}.duckdb")
 
 
