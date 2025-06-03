@@ -37,8 +37,8 @@ T_INPUT = "INFERENCE_INFO"
 T_OUTPUT = "DEVELOPER_INFERENCE"
 DB_PATH = Path(DATA_DIR, f"{os.environ['DUCKDB_STAGING_NAME']}.duckdb")
 
-LIMIT = int(os.getenv("PROFILE_INFER_LIMIT", 1))
-CONCUR = int(os.getenv("PROFILE_INFER_CONCURRENCY", 20))
+LIMIT = int(os.getenv("PROFILE_INFER_LIMIT", 100))
+CONCUR = int(os.getenv("PROFILE_INFER_CONCURRENCY", 5))
 # AGENT_KEY = "Developer_Inference"
 AGENT_KEY = "Developer_Inference_gemini"
 
