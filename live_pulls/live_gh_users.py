@@ -29,9 +29,7 @@ load_dotenv()
 setup_logging()
 log = logging.getLogger(__name__)
 
-# STG_DB = Path(DATA_DIR, f"{os.environ['DUCKDB_STAGING_NAME']}.duckdb")
 STG_DB = Path(DATA_DIR, f"{os.getenv('LIVE_DB_NAME')}.duckdb")
-
 T_COMMITS = "GITHUB_COMMITS"
 T_USERS = "GITHUB_ACTIVE_USERS"
 
