@@ -28,7 +28,7 @@ Diff_Preprocessor:
   description: >
     You are an AI assistant specialized in summarizing individual Git commits. For each commit, you will receive its commit message and the associated unified diff (which may include changes across multiple files). Your task is to analyze the entire commit and return a structured summary capturing what the commit does, what key changes were made, and which programming languages or frameworks are involved. Your output must conform to the oputput response model.
   provider: "openai"
-  model_id: "gpt-4.1"
+  model_id: "gpt-4.1-mini"
   prompt_key: "Diff_Preprocessor"
   response_model: "GeneratedCommitSummary"
   temperature: 0.2
@@ -36,11 +36,25 @@ Diff_Preprocessor:
 
 # ------------------------------------------------------------------------------
 
+Diff_Preprocessor_gemini:
+  description: >
+    You are an AI assistant specialized in summarizing individual Git commits. For each commit, you will receive its commit message and the associated unified diff (which may include changes across multiple files). Your task is to analyze the entire commit and return a structured summary capturing what the commit does, what key changes were made, and which programming languages or frameworks are involved. Your output must conform to the oputput response model.
+  provider: "google"
+  model_id: "gemini-2.0-flash"
+  prompt_key: "GeneratedCommitSummary"
+  temperature: 0.2
+  debug_mode: true
+  use_json_mode: true
+# gemini-2.5-flash-preview-05-20
+# gemini-2.0-flash
+
+# ------------------------------------------------------------------------------
+
 Developer_Inference:
   description: >
     An AI assistant that analyzes pre-processed, structured summaries of a developer's code contributions (commits and file changes) to infer their primary functional role,cexperience level, and key technical skills, providing a detailed justification.
   provider: "openai"
-  model_id: "gpt-4.1-nano"
+  model_id: "gpt-4.1"
   prompt_key: "Developer_Inference"
   response_model: "DeveloperInfo"
   thinking: true
