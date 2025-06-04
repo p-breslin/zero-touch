@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict
 from pydantic import BaseModel
+from arango import ArangoClient
 from contextlib import contextmanager
 from scripts.paths import DATA_DIR, CONFIG_DIR
 
@@ -101,7 +102,9 @@ def validate_output(output_content, schema):
     try:
         # Convert to JSON if response not structured (like Google)
         if isinstance(output_content, str):
+            print(output_content)
             output_content = parse_json(output_content)
+            print(output_content)
 
         # Ensure JSON object is a Pydantic model instance
         if not isinstance(output_content, schema):
@@ -155,3 +158,33 @@ def db_manager(path: Path, *, read_only: bool = False):
 
 def pydantic_to_gemini(output_model: BaseModel) -> str:
     return json.dumps(output_model.model_dump(), ensure_ascii=False, indent=None)
+
+
+def get_arango_client():
+    """
+    Return an ArangoClient connected to the host specified in ARANGO_HOST.
+    """
+    host = os.getenv("ARANGO_HOST")
+    return ArangoClient(hosts=host)
+
+
+def get_system_db():
+    """
+    Return a handle to the _system database (using ARANGO_USERNAME/ARANGO_PASSWORD). Useful for creating or deleting databases.
+    """
+    client = get_arango_client()
+    username = os.getenv("ARANGO_USERNAME", "root")
+    password = os.getenv("ARANGO_PASSWORD")
+    return client.db("_system", username=username, password=password)
+
+
+def get_arango_db():
+    """
+    Return a handle to the target ArangoDB database (ARANGO_DB).
+    Does not create or delete the database—just connects.
+    """
+    client = get_arango_client()
+    username = os.getenv("ARANGO_USERNAME", "root")
+    password = os.getenv("ARANGO_PASSWORD")
+    db_name = os.getenv("ARANGO_DB")
+    return client.db(db_name, username=username, password=password)
