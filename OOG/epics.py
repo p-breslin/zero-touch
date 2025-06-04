@@ -14,8 +14,6 @@ log = logging.getLogger(__name__)
 DEPARTMENT_KEY = "engineering"
 ARANGO_EPICS_COLL = "Epics"
 ARANGO_EDGE_DEPT_TO_EPIC = "dept_to_epic"
-
-# Path to your DuckDB (or compatible) file
 DB_PATH = Path(DATA_DIR, f"{os.getenv('LIVE_DB_NAME')}.duckdb")
 
 

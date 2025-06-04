@@ -14,8 +14,6 @@ log = logging.getLogger(__name__)
 ARANGO_USERS_COLL = "Users"
 ARANGO_EDGE_TEAM_TO_USER = "team_to_user"
 ARANGO_TEAMS_COLL = "Teams"
-
-# Path to your DuckDB (or compatible) file
 DB_PATH = Path(DATA_DIR, f"{os.getenv('LIVE_DB_NAME')}.duckdb")
 
 
@@ -32,9 +30,7 @@ def import_users_and_memberships():
     # Ensure required collections exist
     for coll in (ARANGO_USERS_COLL, ARANGO_EDGE_TEAM_TO_USER, ARANGO_TEAMS_COLL):
         if not db.has_collection(coll):
-            log.error(
-                f"Collection '{coll}' does not exist. Run initialize_graph.py + related scripts first."
-            )
+            log.error(f"Collection '{coll}' does not exist")
             return
 
     user_col = db.collection(ARANGO_USERS_COLL)
