@@ -71,7 +71,7 @@ Developer_Inference_gemini:
   prompt_key: "Developer_Inference"
   thinking: true
   temperature: 0.2
-  debug_mode: true
+  debug_mode: false
   use_json_mode: true
 # gemini-2.5-flash-preview-05-20
 # gemini-2.0-flash
