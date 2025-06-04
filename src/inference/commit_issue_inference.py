@@ -20,8 +20,8 @@ from agno.agent import RunResponse
 from models import IssueKey
 from scripts.paths import DATA_DIR
 from utils.helpers import db_manager
-from agents.agent_builder import build_agent
 from utils.logging_setup import setup_logging
+from src.agents.agent_builder import build_agent
 
 
 # Configuration ----------------------------------------------------------------
@@ -30,7 +30,8 @@ setup_logging()
 log = logging.getLogger(__name__)
 
 T_COMMITS = "GITHUB_COMMITS"
-DB_PATH = Path(DATA_DIR, f"{os.environ['DUCKDB_STAGING_NAME']}.duckdb")
+# DB_PATH = Path(DATA_DIR, f"{os.getenv('DUCKDB_STAGING_NAME')}.duckdb")
+DB_PATH = Path(DATA_DIR, f"{os.getenv('LIVE_DB_NAME')}.duckdb")
 LIMIT = int(os.getenv("COMMIT_KEY_PROCESS_LIMIT", 5000))
 CONCUR = int(os.getenv("COMMIT_KEY_CONCURRENCY_LIMIT", 100))
 AGENT_KEY = "Issue_Key_Inference"
