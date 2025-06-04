@@ -188,14 +188,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-# Traceback (most recent call last):
-#   File "/Users/peter/ExperienceFlow/zero-touch/src/inference/dev_inference.py", line 116, in _infer_profile
-#     info = validate_output(resp.content, DeveloperInfo)
-#            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-#   File "/Users/peter/ExperienceFlow/zero-touch/utils/helpers.py", line 108, in validate_output
-#     output_content = schema(**output_content)
-#                      ^^^^^^^^^^^^^^^^^^^^^^^^
-# TypeError: models.inference_models.DeveloperInfo() argument after ** must be a mapping, not NoneType
-# 2025-06-03 21:44:27 | INFO     | __main__:185 | Done.
