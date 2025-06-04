@@ -14,15 +14,15 @@ from utils.logging_setup import setup_logging
 """
 Matches only the PR users that are not already in MATCHED_USERS against JIRA_ACTIVE_USERS. For each unmatched PR login, compare to every JIRA display name using:
     1. Exact-cleaned substring (confidence 0.95)
-    2. Token-based substring (token length ≥ 4) (confidence 0.90)
-    3. Fuzzy name similarity (Jaccard or token_set_ratio) if ≥ 0.85
+    2. Token-based substring (token length >= 4) (confidence 0.90)
+    3. Fuzzy name similarity (Jaccard or token_set_ratio) if >= 0.85
 
 Pick the single best JIRA match per PR (by descending confidence, then method priority). Write results to PR_USERS_JIRA with columns: JIRA_DISPLAY_NAME, JIRA_ID, GITHUB_LOGIN, GITHUB_ID.
 """
 
 # Configuration ---------------------------------------------------------------
 load_dotenv()
-setup_logging(level=2)
+setup_logging()
 log = logging.getLogger(__name__)
 
 DB_PATH = Path(DATA_DIR, f"{os.getenv('LIVE_DB_NAME')}.duckdb")
@@ -149,7 +149,6 @@ def resolve_pr_users():
 
         best_match: dict[str, Any] = {}
         best_score = 0.0
-        best_method = None
         best_priority = 999
 
         for _, j in jira.iterrows():
@@ -168,7 +167,6 @@ def resolve_pr_users():
                         score == best_score and priority < best_priority
                     ):
                         best_score = score
-                        best_method = method
                         best_priority = priority
                         best_match = {
                             "JIRA_DISPLAY_NAME": jira_name,
@@ -181,7 +179,7 @@ def resolve_pr_users():
                         }
                     continue
 
-            # 2) Token‐substring (require token length ≥ 4)
+            # 2) Token‐substring (require token length >= 4)
             if pr_base and j_tokens:
                 for tok in j_tokens:
                     if len(tok) >= 4 and (
@@ -194,7 +192,6 @@ def resolve_pr_users():
                             score == best_score and priority < best_priority
                         ):
                             best_score = score
-                            best_method = method
                             best_priority = priority
                             best_match = {
                                 "JIRA_DISPLAY_NAME": jira_name,
@@ -219,7 +216,6 @@ def resolve_pr_users():
                     score == best_score and priority < best_priority
                 ):
                     best_score = score
-                    best_method = method
                     best_priority = priority
                     best_match = {
                         "JIRA_DISPLAY_NAME": jira_name,
@@ -231,7 +227,7 @@ def resolve_pr_users():
                         "PR_KEY": pr_login,
                     }
 
-        # If we found any match with confidence ≥ 0.50, record it
+        # If we found any match with confidence >= 0.50, record it
         if best_match and best_score >= 0.50:
             candidates.append(best_match)
 
