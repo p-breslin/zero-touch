@@ -47,6 +47,7 @@ DDL = f"""
 CREATE OR REPLACE TABLE {T_TARGET} (
     JIRA_DISPLAY_NAME TEXT,
     JIRA_ID TEXT,
+    JIRA_EMAIL TEXT,
     GITHUB_LOGIN TEXT,
     GITHUB_ID TEXT
 );
@@ -117,7 +118,7 @@ def resolve_pr_users():
 
         # 2) Fetch all JIRA active users
         jira = cx.execute(
-            f"SELECT ID AS JIRA_ID, DISPLAY_NAME AS JIRA_DISPLAY_NAME FROM {T_JIRA}"
+            f"SELECT ID AS JIRA_ID, DISPLAY_NAME AS JIRA_DISPLAY_NAME, EMAIL AS JIRA_EMAIL FROM {T_JIRA}"
         ).fetchdf()
 
     # Drop any nulls
@@ -154,6 +155,7 @@ def resolve_pr_users():
         for _, j in jira.iterrows():
             jira_id = j["JIRA_ID"]
             jira_name = j["JIRA_DISPLAY_NAME"]
+            jira_email = j["JIRA_EMAIL"]
             j_clean = j["CLEAN_NAME"]
             j_tokens = j["TOKENS"]
 
@@ -171,6 +173,7 @@ def resolve_pr_users():
                         best_match = {
                             "JIRA_DISPLAY_NAME": jira_name,
                             "JIRA_ID": jira_id,
+                            "JIRA_EMAIL": jira_email,
                             "GITHUB_LOGIN": pr_login,
                             "GITHUB_ID": pr_id,
                             "MATCH_METHOD": method,
@@ -196,6 +199,7 @@ def resolve_pr_users():
                             best_match = {
                                 "JIRA_DISPLAY_NAME": jira_name,
                                 "JIRA_ID": jira_id,
+                                "JIRA_EMAIL": jira_email,
                                 "GITHUB_LOGIN": pr_login,
                                 "GITHUB_ID": pr_id,
                                 "MATCH_METHOD": method,
@@ -220,6 +224,7 @@ def resolve_pr_users():
                     best_match = {
                         "JIRA_DISPLAY_NAME": jira_name,
                         "JIRA_ID": jira_id,
+                        "JIRA_EMAIL": jira_email,
                         "GITHUB_LOGIN": pr_login,
                         "GITHUB_ID": pr_id,
                         "MATCH_METHOD": method,
@@ -246,11 +251,17 @@ def resolve_pr_users():
 
         # Finally, drop helper columns
         df_to_insert = df_best[
-            ["JIRA_DISPLAY_NAME", "JIRA_ID", "GITHUB_LOGIN", "GITHUB_ID"]
+            ["JIRA_DISPLAY_NAME", "JIRA_ID", "JIRA_EMAIL", "GITHUB_LOGIN", "GITHUB_ID"]
         ].copy()
     else:
         df_to_insert = pd.DataFrame(
-            columns=["JIRA_DISPLAY_NAME", "JIRA_ID", "GITHUB_LOGIN", "GITHUB_ID"]
+            columns=[
+                "JIRA_DISPLAY_NAME",
+                "JIRA_ID",
+                "JIRA_EMAIL",
+                "GITHUB_LOGIN",
+                "GITHUB_ID",
+            ]
         )
 
     log.info("Selected %d PR -> JIRA matches", len(df_to_insert))
