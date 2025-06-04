@@ -106,19 +106,19 @@ def _insert_inference_info(
         CREATE TABLE IF NOT EXISTS {T_OUTPUT} (
             GITHUB_ID TEXT PRIMARY KEY,
             JIRA_ID TEXT,
-            DB_ID TEXT,
+            UUID TEXT,
             SUMMARIES TEXT
         );
     """)
 
     conn.executemany(
         f"""
-        INSERT INTO {T_OUTPUT} (GITHUB_ID, JIRA_ID, DB_ID, SUMMARIES)
+        INSERT INTO {T_OUTPUT} (GITHUB_ID, JIRA_ID, UUID, SUMMARIES)
         VALUES (?, ?, ?, ?)
         ON CONFLICT (GITHUB_ID) DO UPDATE SET
             SUMMARIES = excluded.SUMMARIES,
             JIRA_ID = excluded.JIRA_ID,
-            DB_ID = excluded.DB_ID;
+            UUID = excluded.UUID;
         """,
         rows,
     )
@@ -205,7 +205,7 @@ async def _preprocess_diffs(
         # Enrich with associated JIRA issues
         matched = stg_conn.execute(
             f"""
-            SELECT DB_ID, JIRA_ID FROM {T_USERS}
+            SELECT UUID, JIRA_ID FROM {T_USERS}
             WHERE GITHUB_ID = ?
             """,
             (committer_id,),

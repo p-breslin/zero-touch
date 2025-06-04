@@ -22,7 +22,7 @@ Generates high-level developer profiles based on structured summaries of commit 
 
     1. Loads structured commit summaries from INFERENCE_INFO.
     2. Sends structured input to an agent to extract DeveloperInfo attributes.
-    4. Builds a row with DB_ID, display name, inferred role, experience level, skillset, analysis, and justification.
+    4. Builds a row with UUID, display name, inferred role, experience level, skillset, analysis, and justification.
     5. Inserts results into DEVELOPER_INFERENCE (one row per developer).
 """
 
@@ -37,7 +37,7 @@ T_OUTPUT = "DEVELOPER_INFERENCE"
 # DB_PATH = Path(DATA_DIR, f"{os.environ['DUCKDB_STAGING_NAME']}.duckdb")
 DB_PATH = Path(DATA_DIR, f"{os.getenv('LIVE_DB_NAME')}.duckdb")
 
-LIMIT = int(os.getenv("PROFILE_INFER_LIMIT", 100))
+LIMIT = int(os.getenv("PROFILE_INFER_LIMIT", 5))
 CONCUR = int(os.getenv("PROFILE_INFER_CONCURRENCY", 5))
 # AGENT_KEY = "Developer_Inference"
 AGENT_KEY = "Developer_Inference_gemini"
@@ -46,16 +46,16 @@ AGENT_KEY = "Developer_Inference_gemini"
 # Load committers with data ----------------------------------------------------
 def _load_committers_with_diff_outputs(conn, limit: int) -> List[Tuple[str, str, str]]:
     """
-    Loads (DB_ID, JIRA_DISPLAY_NAME, SUMMARIES) by joining INFERENCE_INFO and MATCHED_USERS.
+    Loads (UUID, JIRA_DISPLAY_NAME, SUMMARIES) by joining INFERENCE_INFO and MATCHED_USERS.
     """
     tables = {row[0] for row in conn.execute("SHOW TABLES").fetchall()}
     where_clause = "WHERE i.SUMMARIES IS NOT NULL"
 
     if T_OUTPUT in tables:
-        where_clause += f" AND u.DB_ID NOT IN (SELECT DB_ID FROM {T_OUTPUT})"
+        where_clause += f" AND u.UUID NOT IN (SELECT UUID FROM {T_OUTPUT})"
 
     q = f"""
-        SELECT u.DB_ID, u.JIRA_DISPLAY_NAME, i.SUMMARIES
+        SELECT u.UUID, u.JIRA_DISPLAY_NAME, i.SUMMARIES
         FROM {T_INPUT} i
         JOIN MATCHED_USERS u ON i.GITHUB_ID = u.GITHUB_ID
         {where_clause}
@@ -74,7 +74,7 @@ def _insert_inferred_profiles(
 
     conn.execute(f"""
         CREATE TABLE IF NOT EXISTS {T_OUTPUT} (
-            DB_ID TEXT PRIMARY KEY,
+            UUID TEXT PRIMARY KEY,
             JIRA_DISPLAY_NAME TEXT,
             ROLE TEXT,
             EXPERIENCE_LEVEL TEXT,
@@ -87,7 +87,7 @@ def _insert_inferred_profiles(
     conn.executemany(
         f"""
         INSERT INTO {T_OUTPUT} (
-            DB_ID, JIRA_DISPLAY_NAME, ROLE, EXPERIENCE_LEVEL, SKILLS, ANALYSIS, JUSTIFICATION
+            UUID, JIRA_DISPLAY_NAME, ROLE, EXPERIENCE_LEVEL, SKILLS, ANALYSIS, JUSTIFICATION
         ) VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT DO NOTHING;
     """,
@@ -114,6 +114,7 @@ async def _infer_profile(
             prompt = pydantic_to_gemini(parsed)
             resp: RunResponse = await agent.arun(prompt)
             info = validate_output(resp.content, DeveloperInfo)
+            print(info)
 
         else:
             resp: RunResponse = await agent.arun(structured_json_input=parsed)
@@ -187,3 +188,14 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# Traceback (most recent call last):
+#   File "/Users/peter/ExperienceFlow/zero-touch/src/inference/dev_inference.py", line 116, in _infer_profile
+#     info = validate_output(resp.content, DeveloperInfo)
+#            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#   File "/Users/peter/ExperienceFlow/zero-touch/utils/helpers.py", line 108, in validate_output
+#     output_content = schema(**output_content)
+#                      ^^^^^^^^^^^^^^^^^^^^^^^^
+# TypeError: models.inference_models.DeveloperInfo() argument after ** must be a mapping, not NoneType
+# 2025-06-03 21:44:27 | INFO     | __main__:185 | Done.
