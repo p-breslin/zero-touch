@@ -176,6 +176,7 @@ Developer_Inference: >
   *   `last_90d_commits`: Total number of commits.
   *   `pr_review_comments`: Number of PR review comments authored.
   *   `commits`: List of commit summaries (`PreprocessedCommitSummary`), each containing:
+      *   `repos`: List of repository names this commit touched. A commit may span multiple repos. Repository names can strongly hint towards the functional area (e.g., names containing "devops", "infra", "frontend", "backend", "ml", "ai").
       *   `commit_message`, `summary`, `key_changes`
       *   `langs`, `frameworks`
       *   `loc_added`, `loc_removed`, `file_count`, `file_path`
@@ -192,7 +193,7 @@ Developer_Inference: >
 
   **Step 1: Overall Data Assimilation and Planning (`think`)**
   *   Review total `last_90d_commits` and `pr_review_comments`.
-  *   Iterate through `commits`, noting dominant languages (`langs`), frameworks (`frameworks`), and file paths (`file_path`). Observe the nature of changes (`key_changes`, e.g., bug fixes, new features, infrastructure).
+  * Iterate through `commits`, noting repository names (`repos`) that may help indicate specialized roles (e.g., repositories explicitly named "devops-tools", "frontend-app", "backend-api", "ai-models"). Also note dominant languages (`langs`), frameworks (`frameworks`), and file paths (`file_path`). Observe the nature of changes (`key_changes`, e.g., bug fixes, new features, infrastructure).  
   *   Analyze `associated_issues` for patterns (types, summaries, descriptions).
   *   Formulate a preliminary hypothesis about the developer's role and experience level, preparing a brief analysis summary.
 
@@ -227,6 +228,13 @@ Developer_Inference: >
       *   High volume of PR review comments indicating mentorship, code quality oversight, and technical leadership.
       *   Demonstrates strong autonomy, technical depth, and breadth of knowledge.
   *   If evidence is contradictory or insufficient, explicitly select “Mid-level” as a cautious default.
+
+  * Additionally, consider the naming conventions of repositories (`repos`) the developer frequently interacts with. For example:
+    * Frequent commits to repositories explicitly named "frontend", "ui", or similar may suggest "Front End Developer".
+    * Repositories named "backend", "api", or similar may indicate "Back End Developer".
+    * Repository names explicitly referencing "ai", "ml", "model", or "data-science" may suggest "AI Engineer" or "Data Scientist".
+    * Repository names explicitly referencing "devops", "infra", "ci-cd" may indicate "DevOps Engineer".
+    * Repository names clearly indicating cross-domain contributions (e.g., "fullstack-app") may support a "Full Stack Developer" inference, but only if accompanied by substantial front-end and back-end code evidence.
 
   **Step 4: Skills Compilation & Refinement (`think`)**
   *   Aggregate unique technologies (`langs`, `frameworks`) explicitly mentioned in the `commits`. These are primary technical skills.
