@@ -3,7 +3,6 @@ import os
 import re
 import json
 import duckdb
-import hashlib
 import logging
 import pandas as pd
 from pathlib import Path
@@ -45,7 +44,6 @@ T_UNMATCHED_JIRA = "UNMATCHED_JIRA_USERS"
 
 DDL = f"""
 CREATE OR REPLACE TABLE {T_TARGET} (
-    DB_ID TEXT PRIMARY KEY,
     JIRA_ID TEXT,
     GITHUB_ID TEXT,
     GITHUB_ID_ALIAS TEXT[],
@@ -95,11 +93,6 @@ def jaccard(a: set[str], b: set[str]) -> float:
 
 def clean_text(s: Optional[str]) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]", " ", (s or "").lower())).strip()
-
-
-def make_db_id(jira_id: Optional[str], gh_id: Optional[str]) -> str:
-    digest = hashlib.sha1(f"{jira_id}|{gh_id}".encode()).hexdigest()
-    return digest[:20]
 
 
 def block_key_first(name: Optional[str]) -> str:
@@ -229,7 +222,6 @@ def resolve_users():
             alias_ids = row["ALIAS_ID"] or []
             candidate_matches.append(
                 {
-                    "DB_ID": make_db_id(j_id, g_id),
                     "JIRA_ID": j_id,
                     "GITHUB_ID": g_id,
                     "GITHUB_ID_ALIAS": alias_ids.copy(),
@@ -293,7 +285,6 @@ def resolve_users():
                 if g_nospace.startswith(j_nospace):
                     candidate_matches.append(
                         {
-                            "DB_ID": make_db_id(j_id, g_id),
                             "JIRA_ID": j_id,
                             "GITHUB_ID": g_id,
                             "GITHUB_ID_ALIAS": base_alias_ids.copy(),
@@ -314,7 +305,6 @@ def resolve_users():
                 elif j_nospace.startswith(g_nospace):
                     candidate_matches.append(
                         {
-                            "DB_ID": make_db_id(j_id, g_id),
                             "JIRA_ID": j_id,
                             "GITHUB_ID": g_id,
                             "GITHUB_ID_ALIAS": base_alias_ids.copy(),
@@ -341,7 +331,6 @@ def resolve_users():
                 score = round(best_sim, 2)
                 candidate_matches.append(
                     {
-                        "DB_ID": make_db_id(j_id, g_id),
                         "JIRA_ID": j_id,
                         "GITHUB_ID": g_id,
                         "GITHUB_ID_ALIAS": base_alias_ids.copy(),
@@ -394,7 +383,6 @@ def resolve_users():
     else:
         df_best = pd.DataFrame(
             columns=[
-                "DB_ID",
                 "JIRA_ID",
                 "GITHUB_ID",
                 "GITHUB_ID_ALIAS",
