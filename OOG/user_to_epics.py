@@ -15,7 +15,6 @@ USERS_COLL = "Users"
 EPICS_COLL = "Epics"
 USER_TO_EPIC_DIRECT_COLL = "user_to_epic_direct"
 
-# Path to your DuckDB (or compatible) file
 DB_PATH = Path(DATA_DIR, f"{os.getenv('LIVE_DB_NAME')}.duckdb")
 
 
