@@ -21,19 +21,17 @@ try:
             "_system", username="root", password=os.getenv("ARANGO_PASSWORD")
         )
 
-        # db_name = os.getenv("ARANGO_DB")
-        db_names = ["XFLOW_DEV_GITHUB_", "XFLOW_DEV_JIRA_"]
+        db_name = os.getenv("ARANGO_DB")
 
         # Check if the database exists, then delete it
-        for db_name in db_names:
-            if sys_db.has_database(db_name):
-                sys_db.delete_database(db_name)
-                log.info(f"Database '{db_name}' deleted successfully.")
-            else:
-                log.warning(f"Database '{db_name}' does not exist.")
+        if sys_db.has_database(db_name):
+            sys_db.delete_database(db_name)
+            log.info(f"Database '{db_name}' deleted successfully.")
+        else:
+            log.warning(f"Database '{db_name}' does not exist.")
 
-            sys_db.create_database(db_name)
-            log.info(f"New database '{db_name}' created successfully.")
+        sys_db.create_database(db_name)
+        log.info(f"New database '{db_name}' created successfully.")
 
     except Exception as e:
         log.error(f"Failed to authenticate with root: {e}")
