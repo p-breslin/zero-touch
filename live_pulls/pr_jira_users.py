@@ -19,14 +19,14 @@ the MATCHED_USERS table's GITHUB_LOGIN column. Uses a two-phase approach:
 Phase 1: Substring and token-substring matching across all pairs (no blocking).
     1a. Clean both JIRA_DISPLAY_NAME and USER_LOGIN to alphanumeric lowercase.
     1b. Strip trailing digits from the cleaned USER_LOGIN.
-    1c. If the cleaned JIRA name is contained within the cleaned (and digit stripped) USER_LOGIN, or vice versa, accept with high confidence (0.95).
-    1d. If any token of the cleaned JIRA name is a suffix or prefix of the cleaned (digit-stripped) USER_LOGIN, accept with confidence (0.90).
+    1c. If the cleaned JIRA name is contained within the cleaned (and digit-stripped) USER_LOGIN, or vice versa, accept with high confidence.
+    1d. If any token of the cleaned JIRA name (length >= 4) is a suffix or prefix of the cleaned (digit-stripped) USER_LOGIN, accept with confidence.
 
 Phase 2: Blocked name-based fuzzy matching for any JIRA and PR users not matched in Phase 1.
-    - Group by the first three letters of the first token of JIRA_DISPLAY_NAME (lowercased), and the same for USER_LOGIN.
-    - Within each block, compute combined similarity = max(Jaccard(token overlap), fuzzy token_set_ratio) between JIRA_DISPLAY_NAME and USER_LOGIN. If >= 0.85, accept.
+    - Compute a simple “block key” = first 3 letters of the cleaned name/login.
+    - Within each block, compute combined similarity = max(Jaccard(token overlap), fuzzy token_set_ratio) between JIRA_DISPLAY_NAME and USER_LOGIN. If >= TH_FUZZY, accept.
 
-Each match is tagged with METHOD_SUBSTRING, METHOD_TOKEN_SUBSTRING, or METHOD_NAME_SIM. Then perform a greedy 1:1 selection by descending confidence and tier ranking. Final results go into PR_USERS_JIRA with columns: JIRA_DISPLAY_NAME, JIRA_ID, GITHUB_LOGIN, GITHUB_ID.
+Each match is tagged with the matching method. Then perform a greedy 1:1 selection by descending confidence and tier ranking.
 """
 
 
@@ -40,6 +40,11 @@ T_JIRA = "JIRA_ACTIVE_USERS"
 T_PR = "GITHUB_PRS"
 T_TARGET = "PR_USERS_JIRA"
 T_MATCHED = "MATCHED_USERS"
+
+# Threshold constants
+TH_SUBSTRING_HIGH = 0.95
+TH_SUBSTRING_LOW = 0.90
+TH_FUZZY = 0.85
 
 DDL = f"""
 CREATE OR REPLACE TABLE {T_TARGET} (
@@ -118,26 +123,42 @@ def resolve_pr_users():
             f"SELECT USER_ID AS GITHUB_ID, USER_LOGIN AS GITHUB_LOGIN FROM {T_PR}"
         ).fetchdf()
 
-        # Fetch any GitHub logins already matched
-        existing_matched = cx.execute(f"SELECT GITHUB_LOGIN FROM {T_MATCHED}").fetchdf()
-        matched_logins_set = set(existing_matched["GITHUB_LOGIN"].dropna().tolist())
+        existing_matched = cx.execute(
+            f"SELECT LOWER(GITHUB_LOGIN) AS LOGIN_LOWER FROM {T_MATCHED}"
+        ).fetchdf()
+        # Keep only non-empty, non-null logins
+        matched_logins = (
+            existing_matched["LOGIN_LOWER"].dropna().astype(str).str.strip()
+        )
+        matched_logins_set = set(x for x in matched_logins if x)
 
-    # Drop rows with null USER_LOGIN or ID in PRs, and null JIRA_DISPLAY_NAME/ID
+    # Drop any nulls
     prs = prs[prs["GITHUB_LOGIN"].notnull() & prs["GITHUB_ID"].notnull()].copy()
     jira = jira[jira["JIRA_DISPLAY_NAME"].notnull() & jira["JIRA_ID"].notnull()].copy()
 
-    # Exclude any PR users whose login already appears in MATCHED_USERS
-    prs = prs[~prs["GITHUB_LOGIN"].isin(matched_logins_set)].copy()
+    # Exclude PR users whose login appears (case-insensitive) in MATCHED_USERS
+    prs["GITHUB_LOGIN_LOWER"] = prs["GITHUB_LOGIN"].str.lower().str.strip()
+    prs = prs[~prs["GITHUB_LOGIN_LOWER"].isin(matched_logins_set)].copy()
 
-    # Prepare cleaned columns
+    # Prepare cleaned columns (no blocking for Phase 1)
     jira["CLEAN_NAME"] = jira["JIRA_DISPLAY_NAME"].apply(strip_to_alnum)
     prs["CLEAN_LOGIN"] = prs["GITHUB_LOGIN"].apply(strip_to_alnum)
     prs["CLEAN_LOGIN_BASE"] = prs["CLEAN_LOGIN"].apply(strip_trailing_digits)
 
-    # Phase 1: Substring and token-substring matches across all pairs
+    # Phase 1: Substring + token-substring on all pairs (no blocking)
     candidate_phase1: list[dict[str, Any]] = []
     matched_jira_ids: set[str] = set()
     matched_pr_ids: set[str] = set()
+
+    columns_phase1 = [
+        "JIRA_DISPLAY_NAME",
+        "JIRA_ID",
+        "GITHUB_LOGIN",
+        "GITHUB_ID",
+        "MATCH_METHOD",
+        "MATCH_CONFIDENCE",
+        "RANK",
+    ]
 
     for _, j in jira.iterrows():
         j_id = j["JIRA_ID"]
@@ -151,6 +172,10 @@ def resolve_pr_users():
             p_clean = p["CLEAN_LOGIN"]
             p_base = p["CLEAN_LOGIN_BASE"]
 
+            # Skip if already matched in Phase 1
+            if j_id in matched_jira_ids or p_id in matched_pr_ids:
+                continue
+
             # 1a. Substring match on cleaned or digit-stripped base
             if j_clean and p_base:
                 if p_base.startswith(j_clean) or j_clean.startswith(p_base):
@@ -161,17 +186,21 @@ def resolve_pr_users():
                             "GITHUB_LOGIN": p_login,
                             "GITHUB_ID": p_id,
                             "MATCH_METHOD": "METHOD_SUBSTRING",
-                            "MATCH_CONFIDENCE": 0.95,
+                            "MATCH_CONFIDENCE": TH_SUBSTRING_HIGH,
+                            "RANK": 1,
                         }
                     )
                     matched_jira_ids.add(j_id)
                     matched_pr_ids.add(p_id)
                     continue
 
-            # 1b. Token sub-str match: any JIRA token is suffix/prefix of p_base
+            # 1b. Token-substring match: any JIRA token (length >= 4) is suffix/prefix of p_base
             if p_base and j_tokens:
+                found_token_match = False
                 for tok in j_tokens:
-                    if p_base.endswith(tok) or p_base.startswith(tok):
+                    if len(tok) >= 4 and (
+                        p_base.endswith(tok) or p_base.startswith(tok)
+                    ):
                         candidate_phase1.append(
                             {
                                 "JIRA_DISPLAY_NAME": j_name,
@@ -179,16 +208,18 @@ def resolve_pr_users():
                                 "GITHUB_LOGIN": p_login,
                                 "GITHUB_ID": p_id,
                                 "MATCH_METHOD": "METHOD_TOKEN_SUBSTRING",
-                                "MATCH_CONFIDENCE": 0.90,
+                                "MATCH_CONFIDENCE": TH_SUBSTRING_LOW,
+                                "RANK": 2,
                             }
                         )
                         matched_jira_ids.add(j_id)
                         matched_pr_ids.add(p_id)
+                        found_token_match = True
                         break
-                if j_id in matched_jira_ids and p_id in matched_pr_ids:
+                if found_token_match:
                     continue
 
-            # 1c. Check cleaned login vs cleaned name
+            # 1c. Cleaned login vs cleaned name (alternate substring)
             if j_clean and p_clean:
                 if p_clean.startswith(j_clean) or j_clean.startswith(p_clean):
                     candidate_phase1.append(
@@ -198,22 +229,38 @@ def resolve_pr_users():
                             "GITHUB_LOGIN": p_login,
                             "GITHUB_ID": p_id,
                             "MATCH_METHOD": "METHOD_SUBSTRING",
-                            "MATCH_CONFIDENCE": 0.90,
+                            "MATCH_CONFIDENCE": TH_SUBSTRING_LOW,
+                            "RANK": 1,
                         }
                     )
                     matched_jira_ids.add(j_id)
                     matched_pr_ids.add(p_id)
                     continue
 
-    # Phase 2: Blocked fuzzy matching for any unmatched
+    df_phase1 = (
+        pd.DataFrame(candidate_phase1, columns=columns_phase1)
+        if candidate_phase1
+        else pd.DataFrame(columns=columns_phase1)
+    )
+
+    # Phase 2: Blocked fuzzy matching (only against what remains unmatched)
     jira_rem = jira[~jira["JIRA_ID"].isin(matched_jira_ids)].copy()
     prs_rem = prs[~prs["GITHUB_ID"].isin(matched_pr_ids)].copy()
 
-    # Compute block keys for the remainders
-    jira_rem["BLOCK"] = jira_rem["JIRA_DISPLAY_NAME"].apply(block_key)
-    prs_rem["BLOCK"] = prs_rem["GITHUB_LOGIN"].apply(block_key)
+    # Build block keys now
+    jira_rem["BLOCK"] = jira_rem["CLEAN_NAME"].apply(block_key)
+    prs_rem["BLOCK"] = prs_rem["CLEAN_LOGIN_BASE"].apply(block_key)
 
     candidate_phase2: list[dict[str, Any]] = []
+    columns_phase2 = [
+        "JIRA_DISPLAY_NAME",
+        "JIRA_ID",
+        "GITHUB_LOGIN",
+        "GITHUB_ID",
+        "MATCH_METHOD",
+        "MATCH_CONFIDENCE",
+        "RANK",
+    ]
 
     for block, jira_block in jira_rem.groupby("BLOCK"):
         prs_block = prs_rem[prs_rem["BLOCK"] == block]
@@ -229,7 +276,7 @@ def resolve_pr_users():
                 p_login = p["GITHUB_LOGIN"]
 
                 sim = name_similarity(j_name, p_login)
-                if sim >= 0.85:
+                if sim >= TH_FUZZY:
                     candidate_phase2.append(
                         {
                             "JIRA_DISPLAY_NAME": j_name,
@@ -238,35 +285,32 @@ def resolve_pr_users():
                             "GITHUB_ID": p_id,
                             "MATCH_METHOD": "METHOD_NAME_SIM",
                             "MATCH_CONFIDENCE": round(sim, 2),
+                            "RANK": 3,
                         }
                     )
 
-    # Combine Phase1 and Phase2 candidates
-    df_phase1 = pd.DataFrame(candidate_phase1)
-    df_phase2 = pd.DataFrame(candidate_phase2)
-    if not df_phase1.empty:
+    df_phase2 = (
+        pd.DataFrame(candidate_phase2, columns=columns_phase2)
+        if candidate_phase2
+        else pd.DataFrame(columns=columns_phase2)
+    )
+
+    # Combine Phase1 + Phase2 candidates
+    if not df_phase1.empty and not df_phase2.empty:
         df_all = pd.concat([df_phase1, df_phase2], ignore_index=True)
+    elif not df_phase1.empty:
+        df_all = df_phase1.copy()
     else:
         df_all = df_phase2.copy()
 
+    # Filter < 0.50 and sort
     if not df_all.empty:
-        # Filter low-confidence (< 0.50)
         df_all = df_all[df_all["MATCH_CONFIDENCE"] >= 0.50]
-
-        # Assign tier ranks for greedy selection
-        TIER_RANK = {
-            "METHOD_SUBSTRING": 1,
-            "METHOD_TOKEN_SUBSTRING": 2,
-            "METHOD_NAME_SIM": 3,
-        }
-        df_all["RANK"] = df_all["MATCH_METHOD"].map(TIER_RANK)
-
-        # Sort by confidence descending, rank ascending
         df_all.sort_values(
             by=["MATCH_CONFIDENCE", "RANK"], ascending=[False, True], inplace=True
         )
 
-        # Greedy 1:1 selection: best per JIRA_ID, then best per GITHUB_ID
+        # Greedy 1:1 selection
         df_best_jira = df_all.drop_duplicates(subset=["JIRA_ID"], keep="first")
         used_pr_ids = set(df_best_jira["GITHUB_ID"])
         df_best_pr = df_all[~df_all["GITHUB_ID"].isin(used_pr_ids)].drop_duplicates(
@@ -280,7 +324,6 @@ def resolve_pr_users():
             by=["MATCH_CONFIDENCE", "RANK"], ascending=[False, True], inplace=True
         )
     else:
-        # No candidates: empty DataFrame with correct columns
         df_best = pd.DataFrame(
             columns=[
                 "JIRA_DISPLAY_NAME",
@@ -293,9 +336,9 @@ def resolve_pr_users():
             ]
         )
 
-    log.info("Selected %d best PR→JIRA matches", len(df_best))
+    log.info("Selected %d best PR->JIRA matches", len(df_best))
 
-    # Step 4: Insert matched pairs into PR_USERS_JIRA
+    # Step 4: Insert into PR_USERS_JIRA
     with duckdb.connect(DB_PATH) as cx:
         cx.execute(f"DELETE FROM {T_TARGET}")
 
@@ -307,7 +350,7 @@ def resolve_pr_users():
             cx.execute(f"INSERT INTO {T_TARGET} SELECT * FROM TMP_PR_JIRA")
             log.info("Wrote %d rows to %s", len(to_insert), T_TARGET)
         else:
-            log.info("No PR→JIRA matches to write to %s", T_TARGET)
+            log.info("No PR->JIRA matches to write to %s", T_TARGET)
 
 
 if __name__ == "__main__":
