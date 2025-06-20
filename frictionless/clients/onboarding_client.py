@@ -1,0 +1,191 @@
+import logging
+import requests
+import warnings
+from typing import Any, List, Dict, Optional
+from urllib3.exceptions import InsecureRequestWarning
+
+log = logging.getLogger(__name__)
+warnings.filterwarnings("ignore", category=InsecureRequestWarning)  # annoying
+
+
+class OnboardingApiClient:
+    """
+    A client for interacting with the onboarding API. Handles authentication and manages API calls.
+    """
+
+    def __init__(self, base_url: str, email: str, password: str):
+        """
+        Initializes the client with the API base URL and admin credentials.
+
+        Args:
+            base_url (str): The base URL of the onboarding API.
+            email (str): The email of the administrative user.
+            password (str): The password of the administrative user.
+        """
+        self.base_url = base_url
+        self.email = email
+        self.password = password
+        self.session = requests.session()
+        self._auth_token: Optional[str] = None
+        log.debug(f"Onboarding API client initialized for URL: {self.base_url}")
+
+    def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        token: Optional[str] = None,
+        json_data: Optional[Dict[str, Any]] = None,
+        expected_key: Optional[str] = None,
+    ) -> Any:
+        """
+        Internal helper to make HTTP requests.
+
+        Args:
+            method (str): HTTP method ('get', 'post', etc.).
+            path (str): API path (appended to base_url).
+            token (str, optional): JWT for Authorization header.
+            json_data (dict, optional): JSON body to send.
+            expected_key (str, optional): If provided, return response_json[expected_key].
+
+        Returns:
+            Parsed JSON response, or the sub-key if expected_key is given.
+        """
+        url = f"{self.base_url}{path}"
+        headers: Dict[str, str] = {}
+
+        if json_data is not None:
+            headers["Content-Type"] = "application/json"
+        if token:
+            headers["Authorization"] = f"Token {token}"
+        log.debug(f"Request headers: {headers}")
+
+        log.debug(f"{method.upper()} {url}")
+        resp = self.session.request(
+            method, url, headers=headers, json=json_data, verify=False
+        )
+        try:
+            resp.raise_for_status()
+        except requests.HTTPError:
+            log.error(f"HTTP {resp.status_code} on {url}: {resp.text}")
+            raise
+
+        data = resp.json()
+        if expected_key:
+            data = data.get(expected_key, {})
+        return data
+
+    def authenticate(self) -> str:
+        """
+        Authenticates with the onboarding API and caches the JWT access token.
+
+        Returns:
+            str: The JSON Web Token (JWT).
+        """
+        payload = {"email": self.email, "password": self.password}
+        data = self._request("post", "/api/user/signin", json_data=payload)
+        token = data.get("token")
+        if not token:
+            raise RuntimeError("Authentication succeeded but no token in response")
+        self._auth_token = token
+        log.info("Authentication successful. Token cached.")
+        log.debug(f"Authenticated token: {token}")
+
+    def create_partner(self, partner_payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Creates a new partner."""
+        return self._request(
+            "post",
+            "/api/partner/",
+            token=self._auth_token,
+            json_data=partner_payload,
+        )
+
+    def list_industry_categories(self) -> List[Dict[str, Any]]:
+        """Retrieves all available industry categories (model templates)."""
+        return self._request(
+            "get",
+            "/api/industry/category",
+            token=self._auth_token,
+            expected_key="data",
+        )
+
+    def get_industry_details(self, industry_id: int) -> Dict[str, Any]:
+        """Retrieves detailed configuration for a specific industry/model."""
+        return self._request(
+            "get",
+            f"/api/industry/{industry_id}",
+            token=self._auth_token,
+            expected_key="data",
+        )
+
+    def create_customer(self, customer_payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Creates a new customer under the partner account."""
+        return self._request(
+            "post",
+            "/api/onboarding/partner/register-client",
+            token=self._auth_token,
+            json_data=customer_payload,
+        )
+
+    def generate_customer_token(self, customer_email: str) -> str:
+        """Generates a session token for a specific customer."""
+        data = self._request(
+            "post",
+            "/api/onboarding/partner/generate-client-token",
+            token=self._auth_token,
+            json_data={"email": customer_email},
+        )
+        token = data.get("token")
+        if not token:
+            raise RuntimeError("No customer token found in response")
+        return token
+
+    def list_products(self, customer_token: str) -> List[Dict[str, Any]]:
+        """Lists the available products that can be set for a customer."""
+        return self._request(
+            "get",
+            "/api/product",
+            token=customer_token,
+            expected_key="data",
+        )
+
+    def set_product(
+        self, customer_token: str, payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Initializes the customer's product."""
+        return self._request(
+            "post", "/api/set-product", token=customer_token, json_data=payload
+        )
+
+    def set_package(
+        self, customer_token: str, payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Triggers the customer's database creation."""
+        return self._request(
+            "post", "/api/set-package", token=customer_token, json_data=payload
+        )
+
+    def check_db_status(self, customer_token: str) -> Dict[str, Any]:
+        """Polls the creation status of the customer's database."""
+        return self._request("get", "/api/vendor/check-db", token=customer_token)
+
+    def store_github_pat(self, pat: str) -> Dict[str, Any]:
+        """Stores a GitHub Personal Access Token for the customer."""
+        return self._request(
+            "post",
+            "/api/datasource/storePAT",
+            token=self._auth_token,
+            json_data={
+                "source_name": "GitHub",
+                "personal_access_token": pat,
+            },
+        )
+
+    def connect_data_source(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Connects a new data source to the customer account."""
+        return self._request(
+            "post",
+            "/api/datasource/connect",
+            token=self._auth_token,
+            json_data=payload,
+        )
