@@ -100,6 +100,15 @@ class OnboardingApiClient:
             json_data=partner_payload,
         )
 
+    def list_industries(self) -> List[Dict[str, Any]]:
+        """Retrieves all available industries (model templates)."""
+        return self._request(
+            "get",
+            "/api/industry",
+            token=self._auth_token,
+            expected_key="data",
+        )
+
     def list_industry_categories(self) -> List[Dict[str, Any]]:
         """Retrieves all available industry categories (model templates)."""
         return self._request(

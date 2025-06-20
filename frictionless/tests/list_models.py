@@ -23,15 +23,15 @@ def fetch_models():
         # Authenticate
         client.authenticate()
 
-        # Get the list of all available model templates (Industry Categories)
-        models = client.list_industry_categories()
+        # Get the list of all available model templates
+        models = client.list_industries()
 
         log.debug("\n--- Available Industry Categories (Model Templates) ---")
         log.debug(json.dumps(models, indent=2))
 
         model_tuples = {}
         for model in models:
-            model_tuples[model["id"]] = model["name"]
+            model_tuples[model["id"]] = model["categoryName"]
         print(json.dumps(model_tuples, indent=2))
 
     except Exception as e:

@@ -7,14 +7,14 @@ import argparse
 from utils.logger import setup_logging
 from clients.onboarding_client import OnboardingApiClient
 
-setup_logging()
+setup_logging(level=2)
 log = logging.getLogger(__name__)
 
 
 def fetch_models(client: OnboardingApiClient) -> dict[int, str]:
-    """Returns a mapping of industry-category IDs to names."""
-    models = client.list_industry_categories()
-    return {m["id"]: m["name"] for m in models}
+    """Returns a mapping of industry IDs to names."""
+    models = client.list_industries()
+    return {m["id"]: m["categoryName"] for m in models}
 
 
 def fetch_products(client: OnboardingApiClient, token: str) -> dict[int, str]:
