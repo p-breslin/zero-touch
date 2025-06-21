@@ -35,6 +35,7 @@ class OnboardingApiClient:
         path: str,
         *,
         token: Optional[str] = None,
+        params: Optional[Dict[str, Any]] = None,
         json_data: Optional[Dict[str, Any]] = None,
         expected_key: Optional[str] = None,
     ) -> Any:
@@ -62,7 +63,7 @@ class OnboardingApiClient:
 
         log.debug(f"{method.upper()} {url}")
         resp = self.session.request(
-            method, url, headers=headers, json=json_data, verify=False
+            method, url, params=params, headers=headers, json=json_data, verify=False
         )
         try:
             resp.raise_for_status()
@@ -100,6 +101,8 @@ class OnboardingApiClient:
             json_data=partner_payload,
         )
 
+    # === Industry Details =====================================================
+
     def list_industries(self) -> List[Dict[str, Any]]:
         """Retrieves all available industries (model templates)."""
         return self._request(
@@ -127,6 +130,8 @@ class OnboardingApiClient:
             expected_key="data",
         )
 
+    # ==== Customer Creation ===================================================
+
     def create_customer(self, customer_payload: Dict[str, Any]) -> Dict[str, Any]:
         """Creates a new customer under the partner account."""
         return self._request(
@@ -148,6 +153,8 @@ class OnboardingApiClient:
         if not token:
             raise RuntimeError("No customer token found in response")
         return token
+
+    # === Product and Package ==================================================
 
     def list_products(self, customer_token: str) -> List[Dict[str, Any]]:
         """Lists the available products that can be set for a customer."""
@@ -178,6 +185,47 @@ class OnboardingApiClient:
         """Polls the creation status of the customer's database."""
         return self._request("get", "/api/vendor/check-db", token=customer_token)
 
+    # === Model Validation =====================================================
+
+    def list_kpis(self, customer_token: str, industry_id: int) -> List[Dict[str, Any]]:
+        """Lists all KPIs available for the customer."""
+        return self._request(
+            "get",
+            f"/api/industry-all-kpi/{industry_id}",
+            token=customer_token,
+            params={"type": 1},
+        )
+
+    def list_contexts(self, customer_token: str) -> List[Dict[str, Any]]:
+        """Lists all context groups available for the customer."""
+        return self._request(
+            "get",
+            "/api/context-group",
+            token=customer_token,
+        )
+
+    def list_functions(self, token: str, function_code: str) -> List[Dict[str, Any]]:
+        """Lists all functions for the account associated with the token."""
+        return self._request(
+            "get",
+            "/api/domains/function",
+            token=token,
+            json_data={"functionCode": function_code},
+        )
+
+    def get_dictionary_list(
+        self, token: str, function_code: str
+    ) -> List[Dict[str, Any]]:
+        """Gets the list of dictionary tables for a given function code."""
+        return self._request(
+            "get",
+            f"/api/domains/dictionaryList/{function_code}",
+            token=token,
+            json_data={"functionCode": function_code},
+        )
+
+    # === Connect Data Sources =================================================
+
     def store_github_pat(self, pat: str) -> Dict[str, Any]:
         """Stores a GitHub Personal Access Token for the customer."""
         return self._request(
@@ -197,4 +245,18 @@ class OnboardingApiClient:
             "/api/datasource/connect",
             token=self._auth_token,
             json_data=payload,
+        )
+
+    def list_partners(self) -> List[Dict[str, Any]]:
+        """Retrieves a list of all partner accounts accessible by the user."""
+        return self._request(
+            "get",
+            "/api/partner/",
+            token=self._auth_token,
+        )
+
+    def delete_partner(self, partner_id: int) -> Dict[str, Any]:
+        """Deletes a specific partner account by its ID."""
+        return self._request(
+            "delete", f"/api/partner/{partner_id}", token=self._auth_token
         )
