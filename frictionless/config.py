@@ -43,7 +43,7 @@ NEW_PARTNER_PAYLOAD = {
 
 NEW_CUSTOMER_PAYLOAD = {
     "role": 5503,
-    "industryId": "",
+    "industryId": 1873,
     "company_name": "ExperienceFlow",
     "email": "peter.breslin+2@experienceflow.ai",
     "password": os.getenv("XFLOW_PWD"),
@@ -56,7 +56,7 @@ NEW_CUSTOMER_PAYLOAD = {
     "contact_number": "11234567890",
     "created_by": 2212,
 }
-SET_PRODUCT_PAYLOAD = {"product_name": ""}
+SET_PRODUCT_PAYLOAD = {"product_name": "EDNS STRATEGY"}
 SET_PACKAGE_PAYLOAD = {"packageId": "STANDARD"}
 
 # Configuration for the polling loop
