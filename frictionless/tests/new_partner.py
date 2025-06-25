@@ -21,21 +21,15 @@ def partner_creation():
 
     try:
         # Authenticate and retrieve the access token
-        access_token = client.authenticate()
+        client.authenticate()
         log.info("Partner authenticated.")
-
-        if not access_token:
-            log.error("Could not retrieve partner access token.")
-            return
 
         # Use the access token to create a new partner
         log.debug(
             f"Partner payload: {json.dumps(config.NEW_PARTNER_PAYLOAD, indent=2)}"
         )
-        partner_creation_response = client.create_partner(
-            access_token=access_token, partner_payload=config.NEW_PARTNER_PAYLOAD
-        )
-        log.info(f"Response from server\n: {partner_creation_response}")
+        resp = client.create_partner(partner_payload=config.NEW_PARTNER_PAYLOAD)
+        log.info(f"Response from server\n: {resp}")
 
     except Exception as e:
         log.error(f"\nAn error occurred during the partner creation: {e}")
