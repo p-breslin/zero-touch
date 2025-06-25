@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 
 
 def main():
-    """Deletes a partner account."""
+    """Deletes a customer and partner account."""
 
     customer_email = config.NEW_CUSTOMER_PAYLOAD["email"]
     client = OnboardingApiClient(
