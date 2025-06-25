@@ -71,9 +71,22 @@ class OnboardingApiClient:
             log.error(f"HTTP {resp.status_code} on {url}: {resp.text}")
             raise
 
-        data = resp.json()
+        # Safely handle no-content / empty-body responses
+        if resp.status_code == 204 or not resp.text.strip():
+            # For DELETE (or any no-content), return None or empty dict
+            return {} if expected_key else None
+
+        # Otherwise, attempt JSON decode but catch failures
+        try:
+            data = resp.json()
+        except ValueError:
+            # Body wasn’t valid JSON; swallow and return None/{}
+            return {} if expected_key else None
+
+        # If caller asked for a sub-key, pull it out (default to {})
         if expected_key:
-            data = data.get(expected_key, {})
+            return data.get(expected_key, {})
+
         return data
 
     def authenticate(self) -> str:
