@@ -3,15 +3,15 @@ import json
 import time
 import config
 import logging
+import argparse
 from utils.logger import setup_logging
 from clients.mysql_client import mysql_cursor
 from clients.onboarding_client import OnboardingApiClient
 
-setup_logging()
 log = logging.getLogger(__name__)
 
 
-def main():
+def pipeline():
     try:
         # 1) Initialize & authenticate
         client = OnboardingApiClient(
@@ -130,8 +130,12 @@ def main():
             record = next((c for c in customers if c["email"] == customer_email), None)
 
             if record:
+                log.debug(json.dumps(record, indent=2))
                 customer_id = record["user_id"]
                 partner_id = record["partner_id"]
+                log.info(f"IDs for {customer_email}:\n")
+                log.info(f"     Customer ID: {customer_id}\n")
+                log.info(f"     Partner ID: {partner_id}")
 
                 with mysql_cursor() as cursor:
                     cursor.execute(
@@ -153,6 +157,25 @@ def main():
     except Exception as e:
         log.error(f"Error during onboarding: {e}")
         sys.exit(1)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Configures the logging level.")
+    parser.add_argument(
+        "-l",
+        "--log-level",
+        type=int,
+        choices=[10, 20, 30, 40, 50],
+        default=20,
+        help="Logging level (10=DEBUG, 20=INFO, 30=WARNING, 40=ERROR, 50=CRITICAL)",
+    )
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    setup_logging(level=args.log_level)
+    pipeline()
 
 
 if __name__ == "__main__":
