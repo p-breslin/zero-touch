@@ -4,6 +4,7 @@ import time
 import config
 import logging
 from utils.logger import setup_logging
+from clients.mysql_client import mysql_cursor
 from clients.onboarding_client import OnboardingApiClient
 
 setup_logging()
@@ -123,18 +124,29 @@ def main():
         if answer in ("y", "yes"):
             log.info("Deleting customer...")
 
-            # Fetch all partners and find the one we just created
-            partners = client.list_partners()
+            # Fetch the customer and respective partner details
+            customers = client.list_customers()
             customer_email = config.NEW_CUSTOMER_PAYLOAD["email"]
-            partner_id = next(
-                (p["id"] for p in partners if p["email"] == customer_email),
-                None,
-            )
-            if partner_id is None:
-                log.error(f"Cannot find partner with email {customer_email}")
-            else:
+            record = next((c for c in customers if c["email"] == customer_email), None)
+
+            if record:
+                customer_id = record["user_id"]
+                partner_id = record["partner_id"]
+
+                with mysql_cursor() as cursor:
+                    cursor.execute(
+                        "DELETE FROM `core_user` WHERE `id` = %s", (customer_id,)
+                    )
+                    log.debug(f"Deleted {cursor.rowcount} row(s)")
+                    log.info("Customer deleted.")
+
                 client.delete_partner(partner_id)
-                log.info("Customer deleted.")
+                log.info("Partner deleted.")
+            else:
+                customer_id = None
+                partner_id = None
+                log.error(f"Cannot find client with email {customer_email}")
+
         else:
             log.info("Keeping customer. Exiting without deletion.")
 
