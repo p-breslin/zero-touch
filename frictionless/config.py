@@ -22,7 +22,7 @@ NEW_PARTNER_PAYLOAD = {
     "name": "Peter Breslin",
     "first_name": "Peter",
     "last_name": "Breslin",
-    "company": "Frictionless Test 02",
+    "company": "Frictionless Test 01",
     "role": 3402,
     "contact_number": 1234567890,
     "partner_id": 1,
@@ -44,7 +44,7 @@ NEW_PARTNER_PAYLOAD = {
 NEW_CUSTOMER_PAYLOAD = {
     "role": 5503,
     "industryId": 1873,
-    "company_name": "ExperienceFlow",
+    "company_name": "Frictionless Test 01",
     "email": "peter.breslin+2@experienceflow.ai",
     "password": os.getenv("XFLOW_PWD"),
     "country": "United States",
