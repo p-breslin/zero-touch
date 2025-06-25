@@ -6,6 +6,7 @@ import logging
 import argparse
 from utils.logger import setup_logging
 from clients.mysql_client import mysql_cursor
+from utils.model_validation import validate_model
 from clients.onboarding_client import OnboardingApiClient
 
 log = logging.getLogger(__name__)
@@ -90,28 +91,8 @@ def pipeline():
             )
             time.sleep(config.POLLING_INTERVAL_SECONDS)
 
-        # 7) Validate KPIs
-        log.info("Validating KPIs...")
-        kpi_dict = client.list_kpis(
-            customer_token, config.NEW_CUSTOMER_PAYLOAD["industryId"]
-        )
-        log.debug(json.dumps(kpi_dict, indent=2))
-        kpis = kpi_dict.get("data", {})
-        if not kpis:
-            log.warning("Validation Warning: No KPIs found in payload.")
-        else:
-            log.info(f"Found {len(kpis)} KPIs.")
-            log.debug(json.dumps(kpis, indent=2))
-            print("--- Available KPIs ---\n")
-            kpi_map = {
-                kpi["id"]: {
-                    "functionName": kpi["functionName"],
-                    "name": kpi["name"],
-                    "metric_attributes": len(kpi.get("metric_attributes", [])),
-                }
-                for kpi in kpis
-            }
-            print(json.dumps(kpi_map, indent=2))
+        # 7) Validate model
+        validate_model(client, config.NEW_CUSTOMER_PAYLOAD["industryId"])
 
         log.info(
             "\nOnboarding complete: model, product, and package have been set. Customer database successfully created."
