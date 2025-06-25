@@ -24,6 +24,7 @@ NEW_PARTNER_PAYLOAD = {
     "last_name": "Breslin",
     "company": "Frictionless Test 01",
     "role": 3402,
+    "partner_id": 257,
     "contact_number": 1234567890,
     "industry_name": "",
     "zip_code": 94105,
@@ -53,7 +54,6 @@ NEW_CUSTOMER_PAYLOAD = {
     "last_name": "Breslin",
     "countryCode": "+1",
     "contact_number": "11234567890",
-    "partner_id": 255,
     "created_by": 2212,
 }
 SET_PRODUCT_PAYLOAD = {"product_name": "EDNS STRATEGY"}
