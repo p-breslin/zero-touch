@@ -22,7 +22,7 @@ def pipeline():
         log.info("Authenticating partner...")
         client.authenticate()
 
-        # 2) Create customer
+        # 2) Create a customer
         customer_payload = dict(config.NEW_CUSTOMER_PAYLOAD)
         log.debug("Customer payload:\n" + json.dumps(customer_payload, indent=2))
         log.info("Creating customer...")
@@ -144,8 +144,8 @@ def pipeline():
                     log.debug(f"Deleted {cursor.rowcount} row(s)")
                     log.info("Customer deleted.")
 
-                client.delete_partner(partner_id)
-                log.info("Partner deleted.")
+                # client.delete_partner(partner_id)
+                # log.info("Partner deleted.")
             else:
                 customer_id = None
                 partner_id = None
