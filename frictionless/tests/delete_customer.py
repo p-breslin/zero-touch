@@ -40,17 +40,13 @@ def main():
             customer_id = None
             partner_id = None
 
-        log.info(f"IDs for {customer_email}:\n")
-        log.info(f"Customer ID: {customer_id}\n")
+        log.info(f"IDs for {customer_email}:")
+        log.info(f"Customer ID: {customer_id}")
         log.info(f"Partner ID: {partner_id}")
 
         # 3) Delete the customer
         delete_core_user(customer_id)
         log.info("Customer deleted.")
-
-        # 4) Delete the partner
-        client.delete_partner(partner_id)
-        log.info("Partner deleted.")
 
     except Exception as e:
         log.error(f"An error occurred during customer deletion: {e}")
