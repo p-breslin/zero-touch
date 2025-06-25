@@ -260,3 +260,11 @@ class OnboardingApiClient:
         return self._request(
             "delete", f"/api/partner/{partner_id}", token=self._auth_token
         )
+
+    def list_customers(self) -> List[Dict[str, Any]]:
+        """Retrieves list of all customer accounts accessible by the partner."""
+        return self._request(
+            "get",
+            "/api/onboarding/partner/list-clients",
+            token=self._auth_token,
+        )
