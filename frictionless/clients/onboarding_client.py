@@ -200,40 +200,54 @@ class OnboardingApiClient:
 
     # === Model Validation =====================================================
 
-    def list_kpis(self, customer_token: str, industry_id: int) -> List[Dict[str, Any]]:
+    def list_kpis(self, industry_id: int) -> List[Dict[str, Any]]:
         """Lists all KPIs available for the customer."""
         return self._request(
             "get",
             f"/api/industry-all-kpi/{industry_id}",
-            token=customer_token,
+            token=self._auth_token,
             params={"type": 1},
         )
 
-    def list_contexts(self, customer_token: str) -> List[Dict[str, Any]]:
-        """Lists all context groups available for the customer."""
+    def list_functions(self) -> List[Dict[str, Any]]:
+        """Lists all functions."""
         return self._request(
-            "get",
-            "/api/context-group",
-            token=customer_token,
+            "get", "/api/function", token=self._auth_token, expected_key="data"
         )
 
-    def list_functions(self, token: str, function_code: str) -> List[Dict[str, Any]]:
-        """Lists all functions for the account associated with the token."""
+    def list_contexts(self) -> List[Dict[str, Any]]:
+        """Lists all context types available for the customer."""
         return self._request(
-            "get",
-            "/api/domains/function",
-            token=token,
-            json_data={"functionCode": function_code},
+            "get", "/api/contextTypes", token=self._auth_token, expected_key="data"
         )
 
-    def get_dictionary_list(
-        self, token: str, function_code: str
-    ) -> List[Dict[str, Any]]:
-        """Gets the list of dictionary tables for a given function code."""
+    def industry_metric_functions(self, industry_id: int) -> List[Dict[str, Any]]:
+        """Lists all context types available for the customer."""
+        return self._request(
+            "get",
+            f"/api/industry-metric/function/{industry_id}",
+            token=self._auth_token,
+            expected_key="data",
+        )
+
+    def get_dictionary_list(self, function_code: str) -> List[Dict[str, Any]]:
+        """Gets the list of dictionaries for a given function code."""
         return self._request(
             "get",
             f"/api/domains/dictionaryList/{function_code}",
-            token=token,
+            token=self._auth_token,
+            expected_key="data",
+        )
+
+    def get_dictionary(
+        self,
+        function_code: str,
+    ) -> List[Dict[str, Any]]:
+        """Gets the list of dictionaries for a given function code."""
+        return self._request(
+            "post",
+            "/api/domains/getDictionary",
+            token=self._auth_token,
             json_data={"functionCode": function_code},
         )
 
