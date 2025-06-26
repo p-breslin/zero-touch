@@ -30,7 +30,7 @@ def pipeline():
         customer_resp = client.create_customer(customer_payload)
         log.debug("Customer creation response:\n" + json.dumps(customer_resp, indent=2))
         log.info(
-            f"Customer created: {
+            f"Customer created:\n{
                 json.dumps(
                     {
                         'Company': customer_resp['company_name'],
@@ -42,17 +42,17 @@ def pipeline():
             }"
         )
 
-        # 3) Generate customer-scoped token
+        # 3) Generate customer token
         customer_email = customer_payload["email"]
         log.info(f"Generating token for customer {customer_email}...")
-        customer_token = client.generate_customer_token(customer_email)
-        log.debug("Customer-scoped token obtained.")
+        client.generate_customer_token(customer_email)
+        log.debug("Customer token obtained.")
 
         # 4) Set product
         product_payload = dict(config.SET_PRODUCT_PAYLOAD)
         log.debug("Set-product payload:\n" + json.dumps(product_payload, indent=2))
         log.info("Setting product...")
-        product_resp = client.set_product(customer_token, product_payload)
+        product_resp = client.set_product(product_payload)
         log.info(f"Product set: {product_payload['product_name']}")
         log.debug("Set-product response:\n" + json.dumps(product_resp, indent=2))
 
@@ -60,7 +60,7 @@ def pipeline():
         package_payload = dict(config.SET_PACKAGE_PAYLOAD)
         log.debug("Set-package payload:\n" + json.dumps(package_payload, indent=2))
         log.info("Setting package...")
-        package_resp = client.set_package(customer_token, package_payload)
+        package_resp = client.set_package(package_payload)
         log.info(f"Package set: {package_payload['packageId']}")
         log.debug("Set-package response:\n" + json.dumps(package_resp, indent=2))
 
@@ -77,7 +77,7 @@ def pipeline():
                 )
                 sys.exit(1)
 
-            status = client.check_db_status(customer_token)
+            status = client.check_db_status()
             log.debug("Poll response:\n" + json.dumps(status, indent=2))
 
             if status.get("payload", {}).get("db_exists"):
@@ -98,14 +98,14 @@ def pipeline():
             "\nOnboarding complete: model, product, and package have been set. Customer database successfully created."
         )
 
-        # Prompt to delete the just created customer
+        # Prompt to delete the customer
         answer = (
-            input("Would you like to DELETE this customer? (y/N): ").strip().lower()
+            input("Would you like to DELETE this customer? (Y/N): ").strip().lower()
         )
-        if answer in ("y", "yes"):
+        if answer in ("Y", "y", "yes"):
             log.info("Deleting customer...")
 
-            # Fetch the customer and respective partner details
+            # Fetch the customer details
             customers = client.list_customers()
             customer_email = config.NEW_CUSTOMER_PAYLOAD["email"]
             record = next((c for c in customers if c["email"] == customer_email), None)
@@ -113,10 +113,7 @@ def pipeline():
             if record:
                 log.debug(json.dumps(record, indent=2))
                 customer_id = record["user_id"]
-                partner_id = record["partner_id"]
-                log.info(f"IDs for {customer_email}:\n")
-                log.info(f"     Customer ID: {customer_id}\n")
-                log.info(f"     Partner ID: {partner_id}")
+                log.info(f"Deleting customer with ID = {customer_id}...")
 
                 with mysql_cursor() as cursor:
                     cursor.execute(
@@ -124,13 +121,8 @@ def pipeline():
                     )
                     log.debug(f"Deleted {cursor.rowcount} row(s)")
                     log.info("Customer deleted.")
-
-                # client.delete_partner(partner_id)
-                # log.info("Partner deleted.")
             else:
-                customer_id = None
-                partner_id = None
-                log.error(f"Cannot find client with email {customer_email}")
+                log.error(f"Cannot find customer with email {customer_email}")
 
         else:
             log.info("Keeping customer. Exiting without deletion.")
