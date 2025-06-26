@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from clients.onboarding_client import OnboardingApiClient
 from data_source_definition import jira_projects, active_repos
 
-setup_logging()
+setup_logging(level=2)
 log = logging.getLogger(__name__)
 
 DAYS_BACK = 90
@@ -24,16 +24,12 @@ def connect_sources():
         email=config.ADMIN_EMAIL,
         password=config.ADMIN_PASSWORD,
     )
+    client.authenticate()
 
     try:
-        # Authenticate as the Partner
-        partner_token = client.authenticate()
-
         # Generate the Customer-scoped token
         CUSTOMER_EMAIL = config.NEW_CUSTOMER_PAYLOAD["email"]
-        customer_token = client.generate_customer_token(partner_token, CUSTOMER_EMAIL)
-        if not customer_token:
-            raise Exception("Failed to get customer-scoped token.")
+        client.generate_customer_token(CUSTOMER_EMAIL)
 
         # Connect GitHub (2-step: Auth then Config)
         log.info("\n[CONNECTING GITHUB - STEP 1/2: STORING PAT]")
@@ -46,15 +42,11 @@ def connect_sources():
             },
         }
 
-        gh_pat_resp = client.store_github_pat(
-            customer_token, os.getenv("GITHUB_PERSONAL_ACCESS_TOKEN")
-        )
+        gh_pat_resp = client.store_github_pat(os.getenv("GITHUB_PERSONAL_ACCESS_TOKEN"))
         log.info("GitHub connect response:\n" + json.dumps(gh_pat_resp, indent=2))
 
         log.info("\n[CONNECTING GITHUB - STEP 2/2: SENDING CONFIG]")
-        gh_connect_resp = client.connect_data_source(
-            customer_token, GITHUB_CONNECT_PAYLOAD
-        )
+        gh_connect_resp = client.connect_data_source(GITHUB_CONNECT_PAYLOAD)
         log.info("GitHub Connect response:\n" + json.dumps(gh_connect_resp, indent=2))
 
         # Connect Jira (1-step: Combined Auth/Config)
@@ -71,7 +63,7 @@ def connect_sources():
                 "start_date": start_time_str,
             },
         }
-        jira_resp = client.connect_data_source(customer_token, JIRA_CONNECT_PAYLOAD)
+        jira_resp = client.connect_data_source(JIRA_CONNECT_PAYLOAD)
         log.info("Jira connect response:\n" + json.dumps(jira_resp, indent=2))
 
     except Exception as e:

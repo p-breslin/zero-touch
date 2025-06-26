@@ -27,6 +27,7 @@ class OnboardingApiClient:
         self.password = password
         self.session = requests.session()
         self._auth_token: Optional[str] = None
+        self._customer_auth_token: Optional[str] = None
         log.debug(f"Onboarding API client initialized for URL: {self.base_url}")
 
     def _request(
@@ -165,38 +166,43 @@ class OnboardingApiClient:
         token = data.get("token")
         if not token:
             raise RuntimeError("No customer token found in response")
-        return token
+        log.debug(f"Customer token generated: {token}")
+        self._customer_auth_token = token
 
     # === Product and Package ==================================================
 
-    def list_products(self, customer_token: str) -> List[Dict[str, Any]]:
+    def list_products(self) -> List[Dict[str, Any]]:
         """Lists the available products that can be set for a customer."""
         return self._request(
             "get",
             "/api/product",
-            token=customer_token,
+            token=self._customer_auth_token,
             expected_key="data",
         )
 
-    def set_product(
-        self, customer_token: str, payload: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def set_product(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Initializes the customer's product."""
         return self._request(
-            "post", "/api/set-product", token=customer_token, json_data=payload
+            "post",
+            "/api/set-product",
+            token=self._customer_auth_token,
+            json_data=payload,
         )
 
-    def set_package(
-        self, customer_token: str, payload: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def set_package(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Triggers the customer's database creation."""
         return self._request(
-            "post", "/api/set-package", token=customer_token, json_data=payload
+            "post",
+            "/api/set-package",
+            token=self._customer_auth_token,
+            json_data=payload,
         )
 
-    def check_db_status(self, customer_token: str) -> Dict[str, Any]:
+    def check_db_status(self) -> Dict[str, Any]:
         """Polls the creation status of the customer's database."""
-        return self._request("get", "/api/vendor/check-db", token=customer_token)
+        return self._request(
+            "get", "/api/vendor/check-db", token=self._customer_auth_token
+        )
 
     # === Model Validation =====================================================
 
@@ -258,11 +264,20 @@ class OnboardingApiClient:
         return self._request(
             "post",
             "/api/datasource/storePAT",
-            token=self._auth_token,
+            token=self._customer_auth_token,
             json_data={
                 "source_name": "GitHub",
                 "personal_access_token": pat,
             },
+        )
+
+    def upload_file(self, payload) -> Dict[str, Any]:
+        """Uploads a new data file to the customer account."""
+        return self._request(
+            "post",
+            "/api/datasource/upload",
+            token=self._customer_auth_token,
+            json_data=payload,
         )
 
     def connect_data_source(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -270,9 +285,11 @@ class OnboardingApiClient:
         return self._request(
             "post",
             "/api/datasource/connect",
-            token=self._auth_token,
+            token=self._customer_auth_token,
             json_data=payload,
         )
+
+    # === Misc =================================================================
 
     def list_partners(self) -> List[Dict[str, Any]]:
         """Retrieves a list of all partner accounts accessible by the user."""
