@@ -5,7 +5,7 @@ import logging
 from utils.logger import setup_logging
 from datetime import datetime, timedelta, timezone
 from clients.onboarding_client import OnboardingApiClient
-from data_source_definition import jira_projects, active_repos
+from utils.data_source_definition import jira_projects, active_repos
 
 setup_logging(level=2)
 log = logging.getLogger(__name__)
