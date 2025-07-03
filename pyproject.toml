@@ -8,6 +8,7 @@ dependencies = [
     "agno>=1.4.5",
     "arango>=0.2.1",
     "chromadb>=1.0.8",
+    "crawl4ai>=0.6.3",
     "dotenv>=0.9.9",
     "duckdb-engine>=0.17.0",
     "google-genai>=1.14.0",
@@ -20,6 +21,7 @@ dependencies = [
     "snowflake>=1.4.0",
     "snowflake-sqlalchemy>=1.7.3",
     "sqlalchemy>=2.0.40",
+    "tavily-python>=0.7.8",
 ]
 
 [tool.uv]
