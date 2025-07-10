@@ -3,6 +3,7 @@ import json
 import time
 import config
 import logging
+import requests
 import argparse
 from utils.logger import setup_logging
 from clients.mysql_client import mysql_cursor
@@ -14,7 +15,7 @@ log = logging.getLogger(__name__)
 
 def pipeline():
     try:
-        # 1) Initialize & authenticate
+        # 1) Initialize & authenticate ======
         client = OnboardingApiClient(
             base_url=config.ONBOARDING_API_URL,
             email=config.ADMIN_EMAIL,
@@ -23,7 +24,7 @@ def pipeline():
         log.info("Authenticating partner...")
         client.authenticate()
 
-        # 2) Create a customer
+        # 2) Create a customer ======
         customer_payload = dict(config.NEW_CUSTOMER_PAYLOAD)
         log.debug("Customer payload:\n" + json.dumps(customer_payload, indent=2))
         log.info("Creating customer...")
@@ -42,13 +43,13 @@ def pipeline():
             }"
         )
 
-        # 3) Generate customer token
+        # 3) Generate customer token ======
         customer_email = customer_payload["email"]
         log.info(f"Generating token for customer {customer_email}...")
         client.generate_customer_token(customer_email)
         log.debug("Customer token obtained.")
 
-        # 4) Set product
+        # 4) Set product ======
         product_payload = dict(config.SET_PRODUCT_PAYLOAD)
         log.debug("Set-product payload:\n" + json.dumps(product_payload, indent=2))
         log.info("Setting product...")
@@ -56,7 +57,7 @@ def pipeline():
         log.info(f"Product set: {product_payload['product_name']}")
         log.debug("Set-product response:\n" + json.dumps(product_resp, indent=2))
 
-        # 5) Set package
+        # 5) Set package ======
         package_payload = dict(config.SET_PACKAGE_PAYLOAD)
         log.debug("Set-package payload:\n" + json.dumps(package_payload, indent=2))
         log.info("Setting package...")
@@ -64,17 +65,16 @@ def pipeline():
         log.info(f"Package set: {package_payload['packageId']}")
         log.debug("Set-package response:\n" + json.dumps(package_resp, indent=2))
 
-        # 6) Poll for database creation
+        # 6) Poll for database creation ======
         start_time = time.time()
-        timeout_seconds = config.TIMEOUT_MINUTES * 60
-
+        timeout = config.TIMEOUT_SECONDS / 2
+        interval = config.POLLING_INTERVAL_SECONDS
         log.info("Polling for database creation...")
+
         while True:
             elapsed = time.time() - start_time
-            if elapsed > timeout_seconds:
-                log.error(
-                    f"Timeout of {config.TIMEOUT_MINUTES} minutes exceeded; aborting."
-                )
+            if elapsed > timeout:
+                log.error(f"Timeout of {timeout / 60} minutes exceeded; aborting.")
                 sys.exit(1)
 
             status = client.check_db_status()
@@ -87,16 +87,162 @@ def pipeline():
 
             log.info(
                 f"Database not ready (message: {status.get('payload')}). "
-                f"Retrying in {config.POLLING_INTERVAL_SECONDS}s..."
+                f"Retrying in {interval}s..."
             )
-            time.sleep(config.POLLING_INTERVAL_SECONDS)
+            time.sleep(interval)
 
-        # 7) Validate model
+        # 7) Validate model ======
         validate_model(client, config.NEW_CUSTOMER_PAYLOAD["industryId"])
 
         log.info(
             "\nOnboarding complete: model, product, and package have been set. Customer database successfully created."
         )
+
+        # 8) File upload (skipping datasource connection for now) ======
+        for info in (config.DEMO_DATA_INFO, config.KPI_DATA_INFO):
+            try:
+                # File must be opened in binary mode
+                with open(f"{config.FILE_UPLOAD_PATH}{info['file']}", "rb") as fp:
+                    files = {
+                        "file1": (
+                            info["file"],
+                            fp,
+                            info["filetype"],
+                        )
+                    }
+                    metadata = {
+                        "description": info["description"],
+                        "fileCount": "1",
+                    }
+                    resp = client.file_upload(
+                        files=files,
+                        metadata=metadata,
+                    )
+                    log.info(f"Upload in process: {info['file']})")
+
+            except requests.HTTPError as e:
+                log.error(
+                    f"Upload failed: HTTP {e.response.status_code}\n{e.response.text}"
+                )
+                sys.exit(1)
+
+            # Poll upload status
+            start = time.time()
+            timeout = config.TIMEOUT_SECONDS
+            log.info("Polling for file upload completion...")
+
+            while True:
+                elapsed = time.time() - start
+                if elapsed > timeout:
+                    log.warning(f"Timed out after {timeout / 60} minutes.")
+                    sys.exit(1)
+
+                try:
+                    status = client.file_upload_status()
+                except requests.HTTPError as e:
+                    code = e.response.status_code
+                    body = e.response.text
+                    try:
+                        err_msg = e.response.json().get("error", "")
+                    except ValueError:
+                        err_msg = body
+
+                    # Special-case: wait for metrics creation 500 error
+                    if code == 500 and "Please wait" in err_msg:
+                        log.info("Metrics not ready yet; retrying...")
+                        time.sleep(interval)
+                        continue
+
+                    # Anything else is fatal
+                    log.error(f"Status check failed: HTTP {code}\n{body}")
+                    sys.exit(1)
+
+                # Now status is a 200 JSON dict
+                entries = status.get("data") or None
+                if not entries:
+                    log.info(f"File upload incomplete. Retrying in {interval}s...")
+                    time.sleep(interval)
+                    continue
+
+                # Each new upload takes first index in list
+                entry = entries[0]
+                fs = entry.get("file_status")
+
+                if fs == "stats-processed":
+                    log.info(
+                        f"{info['file']} processed successfully. Upload time: {elapsed:.1f}s"
+                    )
+                    log.debug("Details:\n" + json.dumps(entry, indent=2))
+                    break
+
+                # Still uploading
+                log.info(f"Current status = '{fs}'; retrying in {interval}s...")
+                log.debug("Poll response:\n" + json.dumps(entry, indent=2))
+                time.sleep(interval)
+
+        log.info("All files uploaded.")
+
+        # 9) Metric compute =====
+        try:
+            resp = client.metric_compute()
+        except Exception as e:
+            log.error(f"Unexpected error calling compute-values API: {e}")
+            sys.exit(1)
+
+        log.debug(json.dumps(resp, indent=2))
+        job_id = resp["payload"]["extJobId"]
+
+        # Poll compute status
+        start = time.time()
+        timeout = config.TIMEOUT_SECONDS * 2
+        interval = config.POLLING_INTERVAL_SECONDS
+        log.info(f"Polling for metric compute completion (jobId = '{job_id}')...")
+
+        while True:
+            elapsed = time.time() - start
+            if elapsed > timeout:
+                log.warning(f"Timed out after {timeout / 60} minutes.")
+                sys.exit(1)
+
+            try:
+                summary = client.compute_summary(jobId=job_id)
+            except Exception as e:
+                log.error(f"Unexpected error calling compute-summary API: {e}")
+                sys.exit(1)
+
+            payload = summary.get("payload", {})
+            data_list = payload.get("data") or []
+            if not data_list:
+                log.warning("compute-summary returned no data; retrying...")
+                time.sleep(interval)
+                continue
+
+            # Aggregation status is the final element in the data list
+            aggregation = data_list[-1]
+            status = aggregation.get("result_status")
+            if status == "Completed":
+                total = aggregation.get("total_jobs", "unknown")
+                log.info(
+                    f"Metric compute completed in {elapsed:.1f}s. Total jobs: {total}."
+                )
+                break
+
+            # Compute still in progress
+            log.info(f"Current status = '{status}'; retrying in {interval}s...")
+            log.debug("Poll response payload:\n" + json.dumps(payload, indent=2))
+            time.sleep(interval)
+
+        # Metric compute details
+        try:
+            job_status = client.compute_job_status()
+        except Exception as e:
+            log.error(f"Unexpected error calling listComputeJobStatus API: {e}")
+            sys.exit(1)
+
+        payload = job_status.get("payload", {})
+        print(json.dumps(payload, indent=2))
+        log.info("Metric computation complete.")
+
 
         # Prompt to delete the customer
         answer = (
