@@ -32,7 +32,7 @@ def main():
 
     # Poll compute status
     start = time.time()
-    timeout = config.TIMEOUT_MINUTES * 60 * 60
+    timeout = config.TIMEOUT_SECONDS * 2
     interval = config.POLLING_INTERVAL_SECONDS
     log.info(f"Polling for metric compute completion (jobId = '{job_id}')...")
 

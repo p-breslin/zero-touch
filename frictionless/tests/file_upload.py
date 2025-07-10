@@ -69,7 +69,7 @@ def main():
 
         # Poll upload status
         start = time.time()
-        timeout = config.TIMEOUT_MINUTES * 60 * 30
+        timeout = config.TIMEOUT_SECONDS
         interval = config.POLLING_INTERVAL_SECONDS
         log.info("Polling for file upload completion...")
 
