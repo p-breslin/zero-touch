@@ -38,6 +38,8 @@ class OnboardingApiClient:
         token: Optional[str] = None,
         params: Optional[Dict[str, Any]] = None,
         json_data: Optional[Dict[str, Any]] = None,
+        files: Optional[Dict[str, Any]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
         expected_key: Optional[str] = None,
     ) -> Any:
         """
@@ -48,6 +50,8 @@ class OnboardingApiClient:
             path (str): API path (appended to base_url).
             token (str, optional): JWT for Authorization header.
             json_data (dict, optional): JSON body to send.
+            files (dict, optional): Payload for file upload data.
+            metadata (dict, optional): File upload information.
             expected_key (str, optional): If provided, return response_json[expected_key].
 
         Returns:
@@ -64,7 +68,14 @@ class OnboardingApiClient:
 
         log.debug(f"{method.upper()} {url}")
         resp = self.session.request(
-            method, url, params=params, headers=headers, json=json_data, verify=False
+            method,
+            url,
+            params=params,
+            headers=headers,
+            json=json_data,
+            files=files,
+            data=metadata,
+            verify=False,
         )
         try:
             resp.raise_for_status()
@@ -271,13 +282,22 @@ class OnboardingApiClient:
             },
         )
 
-    def upload_file(self, payload) -> Dict[str, Any]:
+    def file_upload(self, files, metadata) -> Dict[str, Any]:
         """Uploads a new data file to the customer account."""
         return self._request(
             "post",
             "/api/datasource/upload",
             token=self._customer_auth_token,
-            json_data=payload,
+            files=files,
+            metadata=metadata,
+        )
+
+    def file_upload_status(self) -> Dict[str, Any]:
+        """Polls the status of a file upload to the customer account."""
+        return self._request(
+            "get",
+            "/api/datasource/file-upload-status",
+            token=self._customer_auth_token,
         )
 
     def connect_data_source(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -287,6 +307,30 @@ class OnboardingApiClient:
             "/api/datasource/connect",
             token=self._customer_auth_token,
             json_data=payload,
+        )
+
+    # === Metric Compute =======================================================
+
+    def metric_compute(self):
+        return self._request(
+            "post",
+            "/api/datasource/compute-values",
+            token=self._customer_auth_token,
+        )
+
+    def compute_summary(self, jobId: str):
+        return self._request(
+            "post",
+            "/api/vendor/compute-summary",
+            token=self._customer_auth_token,
+            json_data={"jobIds": jobId},
+        )
+
+    def compute_job_status(self):
+        return self._request(
+            "post",
+            "/api/vendor/listComputeJobStatus",
+            token=self._customer_auth_token,
         )
 
     # === Misc =================================================================
