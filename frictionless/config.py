@@ -39,8 +39,7 @@ NEW_PARTNER_PAYLOAD = {
     "role_display_name": "",
 }
 
-# --- Payloads for Customer Initialization ---
-
+# Payloads for customer set-up
 NEW_CUSTOMER_PAYLOAD = {
     "role": 5503,
     "industryId": 1915,  # 1873  Sales=1937
@@ -61,7 +60,20 @@ SET_PACKAGE_PAYLOAD = {"packageId": "STANDARD"}
 
 # Configuration for the polling loop
 POLLING_INTERVAL_SECONDS = 15
-TIMEOUT_MINUTES = 1
+TIMEOUT_SECONDS = 60 * 15
+
+# Data files for upload
+FILE_UPLOAD_PATH = "data/xflow_engineering/"
+DEMO_DATA_INFO = {
+    "file": "xflow_engineering_org_data_demo.xlsx",
+    "description": "Engineering Demo Data",
+    "filetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
+KPI_DATA_INFO = {
+    "file": "KPI_Engineering_CustomerSupport_Report_3.csv",
+    "description": "KPI Data",
+    "filetype": "text/csv",
+}
 
 # Connection details for the ArangoDB instance where graphs are stored
 ARANGO_HOST = "http://arangodb.in.dev.xflow/"
