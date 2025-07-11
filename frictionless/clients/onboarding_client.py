@@ -1,7 +1,8 @@
 import logging
-import requests
 import warnings
-from typing import Any, List, Dict, Optional
+from typing import Any, Dict, List, Optional
+
+import requests
 from urllib3.exceptions import InsecureRequestWarning
 
 log = logging.getLogger(__name__)
@@ -9,9 +10,7 @@ warnings.filterwarnings("ignore", category=InsecureRequestWarning)  # annoying
 
 
 class OnboardingApiClient:
-    """
-    A client for interacting with the onboarding API. Handles authentication and manages API calls.
-    """
+    """A client for interacting with the onboarding API. Handles authentication and manages API calls."""
 
     def __init__(self, base_url: str, email: str, password: str):
         """

@@ -1,14 +1,16 @@
-import sys
-import json
-import time
-import config
-import logging
-import requests
 import argparse
-from utils.logger import setup_logging
+import json
+import logging
+import sys
+import time
+
+import requests
+
+import config
 from clients.mysql_client import mysql_cursor
-from utils.model_validation import validate_model
 from clients.onboarding_client import OnboardingApiClient
+from utils.logger import setup_logging
+from utils.model_validation import validate_model
 
 log = logging.getLogger(__name__)
 
@@ -242,7 +244,6 @@ def pipeline():
         payload = job_status.get("payload", {})
         print(json.dumps(payload, indent=2))
         log.info("Metric computation complete.")
-
 
         # 10) Prompt to delete the customer =====
         answer = (
