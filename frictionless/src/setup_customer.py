@@ -194,7 +194,7 @@ def pipeline():
 
         # Poll compute status
         start = time.time()
-        timeout = config.TIMEOUT_SECONDS * 2
+        timeout = config.TIMEOUT_SECONDS * 8
         interval = config.POLLING_INTERVAL_SECONDS
         log.info(f"Polling for metric compute completion (jobId = '{job_id}')...")
 
@@ -244,7 +244,7 @@ def pipeline():
         log.info("Metric computation complete.")
 
 
-        # Prompt to delete the customer
+        # 10) Prompt to delete the customer =====
         answer = (
             input("Would you like to DELETE this customer? (Y/N): ").strip().lower()
         )
