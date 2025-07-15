@@ -52,7 +52,7 @@ def poll_compute_status(client, job_id) -> PollResult:
     payload = summary.get("payload", {})
     data_list = payload.get("data") or []
     if not data_list:
-        log.info("No summary data yet; retrying...")
+        log.info("No summary data yet.")
         return PollResult(done=False)
 
     aggregation = data_list[-1]
@@ -63,7 +63,6 @@ def poll_compute_status(client, job_id) -> PollResult:
         log.info("Compute status = %s", result_status)
         return PollResult(done=True, value=aggregation)
 
-    log.info("Compute status = '%s'; retrying...", result_status)
     log.debug("Summary payload:\n%s", json.dumps(payload, indent=2))
     return PollResult(done=False)
 
@@ -90,7 +89,10 @@ def wait_for_compute_completion(
         job_id,
         interval=interval,
         timeout=timeout,
-        on_retry=lambda _: None,
+        on_retry=lambda result: log.info(
+            "Compute status = '%s'",
+            result.info.get("result_status") if result.info else "unknown",
+        ),
         on_timeout=lambda elapsed: log.error(
             "Metric compute polling timed out after %.1f seconds", elapsed
         ),
