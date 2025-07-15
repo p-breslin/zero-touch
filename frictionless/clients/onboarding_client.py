@@ -12,16 +12,42 @@ warnings.filterwarnings("ignore", category=InsecureRequestWarning)  # annoying
 
 
 class OnboardingApiClient:
-    """A client for interacting with the onboarding API. Handles auth and API calls."""
+    """Client for interacting with the onboarding API.
+
+    Handles authentication, token management, and standard HTTP request execution.
+    Provides methods for sending requests with JSON bodies, file uploads, and optional
+    authentication headers.
+
+    Attributes:
+        base_url (str): Base URL for the onboarding API.
+        email (str): Admin user's email.
+        password (str): Admin user's password.
+        session (httpx.Client): HTTP client used to perform requests.
+        _auth_token (Optional[str]): Token for partner-level API access.
+        _customer_auth_token (Optional[str]): Token for customer-level API access.
+    """
 
     def __init__(self, base_url: str, email: str, password: str):
-        """
-        Initializes the client with the API base URL and admin credentials.
+        """Internal helper to send HTTP requests to the onboarding API.
+
+        Supports JSON payloads, file uploads, query parameters, and custom headers.
 
         Args:
-            base_url (str): The base URL of the onboarding API.
-            email (str): The email of the administrative user.
-            password (str): The password of the administrative user.
+            method (str): HTTP method (e.g., 'get', 'post', 'delete').
+            path (str): Endpoint path, appended to the base URL.
+            token (Optional[str]): Auth token for Authorization header.
+            params (Optional[Dict[str, Any]]): Query string parameters.
+            json_data (Optional[Dict[str, Any]]): JSON body to send in the request.
+            files (Optional[Dict[str, Any]]): Files to upload as multipart/form-data.
+            metadata (Optional[Dict[str, Any]]): Extra form data (used with file uploads).
+            expected_key (Optional[str]): If set, extract this key from the JSON response.
+
+        Returns:
+            Any: Parsed JSON response, or sub-key value if `expected_key` is set.
+                  If the response has no body, returns {} or None accordingly.
+
+        Raises:
+            httpx.HTTPStatusError: If the response contains an HTTP error status.
         """
         self.base_url = base_url
         self.email = email
@@ -102,8 +128,7 @@ class OnboardingApiClient:
         return data
 
     def authenticate(self) -> str:
-        """
-        Authenticates with the onboarding API and caches the JWT access token.
+        """Authenticates with the onboarding API and caches the JWT access token.
 
         Returns:
             str: The JSON Web Token (JWT).

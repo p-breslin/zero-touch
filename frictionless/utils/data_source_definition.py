@@ -1,24 +1,28 @@
+import logging
 import os
 import sys
-import logging
-from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
 
-from jira import JIRA
-from github import Github, Auth
-from jira.exceptions import JIRAError
+from dotenv import load_dotenv
+from github import Auth, Github
 from github.GithubException import GithubException
+from jira import JIRA
+from jira.exceptions import JIRAError
 
 load_dotenv()
 log = logging.getLogger(__name__)
 
 
 def get_jira_client():
-    """
-    Construct a JIRA client using environment variables:
-      JIRA_SERVER: e.g. "https://your-domain.atlassian.net"
-      JIRA_USERNAME:   your Atlassian account email
-      JIRA_TOKEN:  a personal API token
+    """Constructs and returns a JIRA client using credentials from env variables.
+
+    Required Environment Variables:
+        JIRA_SERVER_URL (str): Base URL of your JIRA instance.
+        JIRA_USERNAME (str): Atlassian account email.
+        JIRA_TOKEN (str): Personal API token for authentication.
+
+    Returns:
+        JIRA: An authenticated JIRA client instance.
     """
     server = os.getenv("JIRA_SERVER_URL")
     user = os.getenv("JIRA_USERNAME")
@@ -36,7 +40,11 @@ def get_jira_client():
 
 
 def jira_projects():
-    """Retrieve all projects and print key and name."""
+    """Fetches and logs all JIRA projects accessible to the user.
+
+    Returns:
+        list[str]: A list of JIRA project keys.
+    """
     try:
         jira_client = get_jira_client()
         projects = jira_client.projects()
@@ -56,6 +64,14 @@ def jira_projects():
 
 
 def get_github_client():
+    """Returns an authenticated GitHub client using a personal access token.
+
+    Required Environment Variable:
+        GITHUB_PERSONAL_ACCESS_TOKEN (str): A GitHub token with at least `repo` scope.
+
+    Returns:
+        Github: An authenticated GitHub client.
+    """
     token = os.getenv("GITHUB_PERONAL_ACCESS_TOKEN")
     if not token:
         sys.exit(
@@ -65,8 +81,17 @@ def get_github_client():
 
 
 def active_repos(DAYS_BACK):
-    """
-    Fetch and list all repositories for a user or organization that were active(i.e. received a push) within the last 90 days.
+    """Lists all GitHub repos in the org that had commits pushed within the last N days.
+
+    Args:
+        DAYS_BACK (int): Number of days to look back from today.
+
+    Environment Variables:
+        GITHUB_PERSONAL_ACCESS_TOKEN (str): GitHub token with org access.
+        GITHUB_ORG_NAME (str): The organization name to scan.
+
+    Returns:
+        list[str]: List of active repo full names (e.g., "org/repo").
     """
     GH_TOKEN = os.getenv("GITHUB_PERSONAL_ACCESS_TOKEN")
     if not GH_TOKEN:

@@ -1,16 +1,28 @@
-import sys
 import json
 import logging
+import sys
 from collections import defaultdict
 
 log = logging.getLogger(__name__)
 
 
 def validate_model(client, industry_id):
-    """
-    Validates that a newly created customer's environment has been correctly instantiated from the selected model template.
-    """
+    """Checks the attributes for a customer model.
 
+    Validates that a newly created customer's environment has been instantiated
+    correctly from the selected industry model template.
+
+    Performs validation across:
+        1. KPIs — Verifies that KPIs were correctly generated.
+        2. Functions — Validates function metadata per KPI.
+        3. Roles — Ensures the appropriate roles are defined.
+        4. Contexts — Lists and validates all metric contexts.
+        5. Dictionaries — Checks dictionary metadata for all unique function codes.
+
+    Args:
+        client (OnboardingApiClient): Authenticated API client.
+        industry_id (int): The industry/model template ID used to generate the customer.
+    """
     try:
         # 1) Validate KPIs
         log.info("Validating KPIs...")

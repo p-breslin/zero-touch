@@ -1,9 +1,12 @@
-import sys
 import logging
+import sys
 
 
 class CustomFormatter(logging.Formatter):
-    """A custom log formatter with different formats based on the log level."""
+    """A log formatter that adjusts output formatting based on the log level.
+
+    INFO-level logs use a concise format, while DEBUG and higher levels use a detailed format including timestamp, logger name, and line number.
+    """
 
     # Define a detailed format for DEBUG and higher-level warnings/errors
     detailed_format = (
@@ -32,7 +35,14 @@ class CustomFormatter(logging.Formatter):
         }
 
     def format(self, record: logging.LogRecord) -> str:
-        """Overrides the default format to choose one based on log level."""
+        """Selects the appropriate log format dynamically based on log level.
+
+        Args:
+            record (LogRecord): The log record being processed.
+
+        Returns:
+            str: The formatted log string.
+        """
         formatter = self.formatters.get(record.levelno)
         return formatter.format(record)
 
@@ -41,12 +51,14 @@ def setup_logging(
     level: int = logging.INFO,
     stream=None,
 ) -> None:
-    """
-    Configures the root logger with the custom formatter.
+    """Initializes the root logger with a custom formatter and optional output stream.
+
+    Applies different formats based on severity, suppresses noisy third-party logs,
+    and clears preexisting handlers to avoid duplication.
 
     Args:
-        level: default overall log level (INFO by default)
-        stream: if truthy, log to sys.stdout; otherwise caller adds own handlers
+        level (int): Minimum log level to process (default: INFO).
+        stream (Optional[Any]): If provided, logs are written to sys.stdout. Otherwise, no default stream handler is added.
     """
     # Get the root logger
     root_logger = logging.getLogger()
