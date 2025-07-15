@@ -56,11 +56,14 @@ def poll_compute_status(client, job_id) -> PollResult:
         return PollResult(done=False)
 
     aggregation = data_list[-1]
-    status = aggregation.get("result_status")
-    if status == "Completed":
+    job_status = aggregation.get("job_status")
+    result_status = aggregation.get("result_status")
+
+    if job_status == "Aggregation" and result_status == "Completed":
+        log.info("Compute status = %s", result_status)
         return PollResult(done=True, value=aggregation)
 
-    log.info("Compute status = '%s'; retrying...", status)
+    log.info("Compute status = '%s'; retrying...", result_status)
     log.debug("Summary payload:\n%s", json.dumps(payload, indent=2))
     return PollResult(done=False)
 
