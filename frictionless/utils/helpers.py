@@ -1,19 +1,22 @@
 from __future__ import annotations
-import os
-import yaml
+
 import json
-import duckdb
 import logging
+import os
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict
-from pydantic import BaseModel
-from arango import ArangoClient
-from contextlib import contextmanager
-from scripts.paths import DATA_DIR, CONFIG_DIR
 
+import click
+import duckdb
+import yaml
 from agno.models.google import Gemini
 from agno.models.openai import OpenAIChat
 from agno.models.openrouter import OpenRouter
+from arango import ArangoClient
+from pydantic import BaseModel
+
+from scripts.paths import CONFIG_DIR, DATA_DIR
 
 log = logging.getLogger(__name__)
 
@@ -188,3 +191,26 @@ def get_arango_db():
     password = os.getenv("ARANGO_PASSWORD")
     db_name = os.getenv("ARANGO_DB")
     return client.db(db_name, username=username, password=password)
+
+
+def confirm_with_timeout(prompt: str, timeout: int = 15, default: bool = True) -> bool:
+    """Prompt user y/N, timeout after `timeout` seconds. Works on Unix/macOS only."""
+    import signal
+
+    class TimeoutExpired(Exception):
+        pass
+
+    def _timeout_handler(signum, frame):
+        raise TimeoutExpired()
+
+    signal.signal(signal.SIGALRM, _timeout_handler)
+    signal.alarm(timeout)
+    try:
+        return click.confirm(prompt, default=default)
+    except TimeoutExpired:
+        click.echo(
+            f"\nNo response in {timeout}s — defaulting to {'Yes' if default else 'No'}."
+        )
+        return default
+    finally:
+        signal.alarm(0)
