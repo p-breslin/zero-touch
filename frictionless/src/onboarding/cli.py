@@ -144,7 +144,7 @@ def metric_compute(ctx):
     click.echo("Metrics computed")
 
     # Fetch and display final job status
-    status = fetch_compute_job_status(client)
+    status = fetch_compute_job_status(client, job_id)
     click.echo(json.dumps(status, indent=2))
 
 

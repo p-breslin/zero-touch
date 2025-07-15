@@ -346,11 +346,25 @@ class OnboardingApiClient:
             json_data={"jobIds": jobId},
         )
 
-    def compute_job_status(self):
+    def compute_job_status(
+        self,
+        jobId: str,
+        parentId: int = None,
+        startDate: str = None,
+        timeRange: int = None,
+        isPublished: int = None,
+    ):
         return self._request(
             "post",
             "/api/vendor/listComputeJobStatus",
             token=self._customer_auth_token,
+            json_data={
+                "jobIds": jobId,
+                "parentId": parentId,
+                "startDate": startDate,
+                "timeRange": timeRange,
+                "isPublished": isPublished,
+            },
         )
 
     # === Misc =================================================================

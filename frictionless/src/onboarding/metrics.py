@@ -103,18 +103,19 @@ def wait_for_compute_completion(
     return final_agg
 
 
-def fetch_compute_job_status(client) -> dict:
+def fetch_compute_job_status(client, job_id) -> dict:
     """Fetches detailed compute job status list.
 
     Args:
         client (OnboardingApiClient): Authenticated API client.
+        job_id (str): The external job ID returned by `compute_metrics()`.
 
     Returns:
         dict: The payload dict from `client.compute_job_status()`.
     """
     log.info("Fetching compute job status list...")
     try:
-        resp = client.compute_job_status()
+        resp = client.compute_job_status(jobId=job_id)
     except Exception as e:
         log.error("Unexpected error calling job-status API: %s", e)
         sys.exit(1)
