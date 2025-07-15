@@ -175,11 +175,7 @@ def cleanup(ctx, yes):
     cfg = ctx.obj["cfg"]
     client = ctx.obj["client"]
 
-    if yes or confirm_with_timeout(
-        f"Delete customer {cfg.NEW_CUSTOMER_PAYLOAD['email']}?",
-        timeout=15,
-        default=False,
-    ):
+    if yes or click.confirm(f"Delete customer {cfg.NEW_CUSTOMER_PAYLOAD['email']}?"):
         success = delete_customer(client, cfg.NEW_CUSTOMER_PAYLOAD["email"])
         if not success:
             sys.exit(1)
@@ -196,8 +192,10 @@ def run_onboarding(ctx):
     ctx.invoke(upload_data)
     ctx.invoke(metric_compute)
 
-    # Customer deletion?
-    if click.confirm("Delete this customer?"):
+    # Optional deletion with timeout-based confirmation
+    email = ctx.obj["cfg"].NEW_CUSTOMER_PAYLOAD["email"]
+    prompt = f"Delete customer {email}?"
+    if confirm_with_timeout(prompt, timeout=15, default=False):
         ctx.invoke(cleanup, yes=True)
     else:
         click.echo("Skipped cleanup.")
