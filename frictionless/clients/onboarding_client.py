@@ -346,6 +346,14 @@ class OnboardingApiClient:
             json_data={"jobIds": jobId},
         )
 
+    def compute_time_range(self, extBatchId: str, isPublished: int = None):
+        return self._request(
+            "post",
+            "/api/vendor/compute-summary",
+            token=self._customer_auth_token,
+            json_data={"extBatchId": extBatchId, "isPublished": isPublished},
+        )
+
     def compute_job_status(
         self,
         jobId: str,
