@@ -14,7 +14,7 @@ def compute_metrics(client) -> str:
         client (OnboardingApiClient): Authenticated OnboardingApiClient instance.
 
     Returns:
-        The external job ID for the metric compute.
+        str: The external job ID for the metric computation.
     """
     log.info("Triggering metric compute...")
     try:
@@ -33,11 +33,43 @@ def compute_metrics(client) -> str:
     return job_id
 
 
+def poll_compute_status(client, job_id) -> PollResult:
+    """Performs a single polling iteration for metric computation.
+
+    Args:
+        client (OnboardingApiClient): Authenticated API client.
+        job_id (str): The external job ID returned by `compute_metrics()`.
+
+    Returns:
+        PollResult: done=True once status is 'Completed', otherwise done=False.
+    """
+    try:
+        summary = client.compute_summary(jobId=job_id)
+    except Exception as e:
+        log.error("Error calling compute-summary API: %s", e)
+        sys.exit(1)
+
+    payload = summary.get("payload", {})
+    data_list = payload.get("data") or []
+    if not data_list:
+        log.info("No summary data yet; retrying...")
+        return PollResult(done=False)
+
+    aggregation = data_list[-1]
+    status = aggregation.get("result_status")
+    if status == "Completed":
+        return PollResult(done=True, value=aggregation)
+
+    log.info("Compute status = '%s'; retrying...", status)
+    log.debug("Summary payload:\n%s", json.dumps(payload, indent=2))
+    return PollResult(done=False)
+
+
 def wait_for_compute_completion(
     client, job_id: str, interval: float, timeout: float
 ) -> dict:
     """
-    Poll compute-summary until the compute job finishes.
+    Polls metric computation until it finishes, then returns the final aggregation.
 
     Args:
         client (OnboardingApiClient): Authenticated OnboardingApiClient instance.
@@ -46,33 +78,13 @@ def wait_for_compute_completion(
         timeout (float): Maximum seconds to wait before aborting.
 
     Returns:
-        The final aggregation entry dict when compute is complete.
+        dict: The final aggregation entry dict when compute is complete.
     """
 
-    def poll_status() -> PollResult:
-        try:
-            summary = client.compute_summary(jobId=job_id)
-        except Exception as e:
-            log.error("Error calling compute-summary API: %s", e)
-            sys.exit(1)
-
-        payload = summary.get("payload", {})
-        data_list = payload.get("data") or []
-        if not data_list:
-            log.info("No summary data yet; retrying...")
-            return PollResult(done=False)
-
-        aggregation = data_list[-1]
-        status = aggregation.get("result_status")
-        if status == "Completed":
-            return PollResult(done=True, value=aggregation)
-
-        log.info("Compute status = '%s'; retrying...", status)
-        log.debug("Summary payload:\n%s", json.dumps(payload, indent=2))
-        return PollResult(done=False)
-
-    final = wait_for(
-        poll_status,
+    final_agg = wait_for(
+        poll_compute_status,
+        client,
+        job_id,
         interval=interval,
         timeout=timeout,
         on_retry=lambda _: None,
@@ -81,17 +93,19 @@ def wait_for_compute_completion(
         ),
     )
 
-    total = final.get("total_jobs", "unknown")
+    total = final_agg.get("total_jobs", "unknown")
     log.info("Metric compute completed. Total jobs: %s", total)
-    return final
+    return final_agg
 
 
 def fetch_compute_job_status(client) -> dict:
-    """
-    Fetch detailed compute job status list.
+    """Fetches detailed compute job status list.
 
-    :param client: Authenticated OnboardingApiClient instance.
-    :returns: The payload dict from client.compute_job_status().
+    Args:
+        client (OnboardingApiClient): Authenticated API client.
+
+    Returns:
+        dict: The payload dict from `client.compute_job_status()`.
     """
     log.info("Fetching compute job status list...")
     try:
