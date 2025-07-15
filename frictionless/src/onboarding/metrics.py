@@ -64,7 +64,7 @@ def poll_compute_status(client, job_id) -> PollResult:
         return PollResult(done=True, value=aggregation)
 
     log.debug("Summary payload:\n%s", json.dumps(payload, indent=2))
-    return PollResult(done=False)
+    return PollResult(done=False, info=aggregation)
 
 
 def wait_for_compute_completion(
