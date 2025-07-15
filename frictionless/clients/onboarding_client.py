@@ -346,10 +346,10 @@ class OnboardingApiClient:
             json_data={"jobIds": jobId},
         )
 
-    def compute_time_range(self, extBatchId: str, isPublished: int = None):
+    def compute_time_range(self, extBatchId: str, isPublished: int = 0):
         return self._request(
             "post",
-            "/api/vendor/compute-summary",
+            "/api/vendor/compute/time-range",
             token=self._customer_auth_token,
             json_data={"extBatchId": extBatchId, "isPublished": isPublished},
         )
@@ -360,7 +360,7 @@ class OnboardingApiClient:
         parentId: int = None,
         startDate: str = None,
         timeRange: int = None,
-        isPublished: int = None,
+        isPublished: int = 0,
     ):
         return self._request(
             "post",
