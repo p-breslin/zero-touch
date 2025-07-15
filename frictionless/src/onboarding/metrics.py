@@ -103,7 +103,14 @@ def wait_for_compute_completion(
     return final_agg
 
 
-def fetch_compute_job_status(client, job_id) -> dict:
+def fetch_compute_job_status(
+    client,
+    job_id: str,
+    parentId: int = None,
+    startDate: str = None,
+    timeRange: int = None,
+    isPublished: int = 0,
+) -> dict:
     """Fetches detailed compute job status list.
 
     Args:
@@ -115,7 +122,13 @@ def fetch_compute_job_status(client, job_id) -> dict:
     """
     log.info("Fetching compute job status list...")
     try:
-        resp = client.compute_job_status(jobId=job_id)
+        resp = client.compute_job_status(
+            jobId=job_id,
+            parentId=parentId,
+            startDate=startDate,
+            timeRange=timeRange,
+            isPublished=isPublished,
+        )
     except Exception as e:
         log.error("Unexpected error calling job-status API: %s", e)
         sys.exit(1)
