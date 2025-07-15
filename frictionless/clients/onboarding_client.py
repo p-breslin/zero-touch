@@ -5,6 +5,8 @@ from typing import Any, Dict, List, Optional
 import requests
 from urllib3.exceptions import InsecureRequestWarning
 
+from src.onboarding.errors import FatalApiError, RetryableError
+
 log = logging.getLogger(__name__)
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)  # annoying
 
@@ -291,13 +293,33 @@ class OnboardingApiClient:
             metadata=metadata,
         )
 
-    def file_upload_status(self) -> Dict[str, Any]:
-        """Polls the status of a file upload to the customer account."""
-        return self._request(
-            "get",
-            "/api/datasource/file-upload-status",
-            token=self._customer_auth_token,
-        )
+    def file_upload_status(self) -> dict:
+        """
+        Polls the status of a file upload to the customer account.
+
+        Note:
+            When the upload is complete, the file-upload-status endpoint returns a 500 (“Please wait...”) error as it waits for the metrics service to be ready. We will treat this as a `RetryableError` to ensure the upload process is not halted. We will invoke a `FatalApiError` for any other HTTP failures.
+        """
+        try:
+            status = self._request(
+                "get",
+                "/api/datasource/file-upload-status",
+                token=self._customer_auth_token,
+            )
+            return status or {}
+        except requests.HTTPError as e:
+            code = e.response.status_code
+            # Extract the text or JSON “error” field
+            try:
+                msg = e.response.json().get("error", "")
+            except ValueError:
+                msg = e.response.text or str(e)
+
+            if code == 500 and "Please wait" in msg:
+                raise RetryableError(msg)
+
+            # Anything else is fatal
+            raise FatalApiError(f"Status check failed [{code}]: {msg}")
 
     def connect_data_source(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Connects a new data source to the customer account."""
