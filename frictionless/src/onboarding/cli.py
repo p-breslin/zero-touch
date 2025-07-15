@@ -1,26 +1,28 @@
+import logging
 import sys
 
 import click
 
 import config
-from onboarding.auth import authenticate
-from onboarding.customer import (
+from src.onboarding.auth import authenticate
+from src.onboarding.customer import (
     create_customer,
     delete_customer,
     generate_customer_token,
 )
-from onboarding.file_uploader import upload_and_wait
-from onboarding.metrics import (
+from src.onboarding.file_uploader import upload_and_wait
+from src.onboarding.metrics import (
     compute_metrics,
     fetch_compute_job_status,
     wait_for_compute_completion,
 )
-from onboarding.package import set_package, set_product
-from onboarding.poller import PollResult, wait_for
+from src.onboarding.package import set_package, set_product
+from src.onboarding.poller import PollResult, wait_for
 from utils.logger import setup_logging
 from utils.model_validation import validate_model
 
 setup_logging()
+log = logging.getLogger(__name__)
 
 
 @click.group()
@@ -30,21 +32,21 @@ def cli():
 
 
 @cli.command()
-def onboard():
-    """Runs the full onboarding pipeline end-to-end."""
+def setup_customer():
+    """Sets a customer up within the system."""
     cfg = config
     client = authenticate(cfg)
 
-    # 1) Customer creation & token
+    # Customer creation & token
     create_customer(client, cfg.NEW_CUSTOMER_PAYLOAD)
     generate_customer_token(client, cfg.NEW_CUSTOMER_PAYLOAD["email"])
 
-    # 2) Product & package
+    # Product & package
     set_product(client, cfg.SET_PRODUCT_PAYLOAD)
     set_package(client, cfg.SET_PACKAGE_PAYLOAD)
 
-    # 3) Wait for DB ready
-    def _db_predicate() -> PollResult:
+    # Wait for DB setup
+    def _db_poll() -> PollResult:
         status = client.check_db_status()
         payload = status.get("payload", {})
         if payload.get("db_exists"):
@@ -53,19 +55,30 @@ def onboard():
         return PollResult(done=False)
 
     wait_for(
-        _db_predicate,
+        _db_poll,
         interval=cfg.POLLING_INTERVAL_SECONDS,
         timeout=cfg.TIMEOUT_SECONDS / 2,
         on_timeout=lambda e: click.echo(
             f"DB polling timed out after {e:.1f}s", err=True
         ),
     )
-    click.echo("Database is ready")
+    log.info("Database is ready.")
 
-    # 4) Validate model
+
+@cli.command()
+def model_validation():
+    """Validates the model selected for the newly created customer."""
+    cfg = config
+    client = authenticate(cfg)
     validate_model(client, cfg.NEW_CUSTOMER_PAYLOAD["industryId"])
 
-    # 5) File uploads
+
+@cli.command()
+def upload_data():
+    """Uploads data for the created customer."""
+    cfg = config
+    client = authenticate(cfg)
+    generate_customer_token(client, cfg.NEW_CUSTOMER_PAYLOAD["email"])
     for info in (cfg.DEMO_DATA_INFO, cfg.KPI_DATA_INFO):
         upload_and_wait(
             client,
@@ -74,22 +87,25 @@ def onboard():
             interval=cfg.POLLING_INTERVAL_SECONDS,
             timeout=cfg.TIMEOUT_SECONDS,
         )
+    log.info("All files uploaded.")
 
-    click.echo("All files uploaded")
 
-    # 6) Metrics compute
-    job_id = compute_metrics(
-        client, cfg.POLLING_INTERVAL_SECONDS, cfg.TIMEOUT_SECONDS * 2
-    )
+@cli.command()
+def metric_compute():
+    """Computes metrics for the customer."""
+    cfg = config
+    client = authenticate(cfg)
+
+    job_id = compute_metrics(client, cfg)
     wait_for_compute_completion(
         client,
         job_id,
         interval=cfg.POLLING_INTERVAL_SECONDS,
         timeout=cfg.TIMEOUT_SECONDS * 2,
     )
-    click.echo("Metrics computed")
+    log.info("Metrics computed.")
 
-    # 7) Show final job status
+    # Show final job status
     status = fetch_compute_job_status(client)
     click.echo(status)
 
