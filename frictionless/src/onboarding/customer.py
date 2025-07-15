@@ -8,7 +8,7 @@ from .poller import PollResult
 log = logging.getLogger(__name__)
 
 
-def create_customer(client, payload: dict) -> dict:
+def create_customer(client, payload: dict):
     """Creates a new customer via the Onboarding API.
 
     Args:
