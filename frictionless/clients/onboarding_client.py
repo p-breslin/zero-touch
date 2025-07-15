@@ -2,7 +2,7 @@ import logging
 import warnings
 from typing import Any, Dict, List, Optional
 
-import requests
+import httpx
 from urllib3.exceptions import InsecureRequestWarning
 
 from src.onboarding.errors import FatalApiError, RetryableError
@@ -12,7 +12,7 @@ warnings.filterwarnings("ignore", category=InsecureRequestWarning)  # annoying
 
 
 class OnboardingApiClient:
-    """A client for interacting with the onboarding API. Handles authentication and manages API calls."""
+    """A client for interacting with the onboarding API. Handles auth and API calls."""
 
     def __init__(self, base_url: str, email: str, password: str):
         """
@@ -26,7 +26,7 @@ class OnboardingApiClient:
         self.base_url = base_url
         self.email = email
         self.password = password
-        self.session = requests.session()
+        self.session = httpx.Client(verify=False)
         self._auth_token: Optional[str] = None
         self._customer_auth_token: Optional[str] = None
         log.debug(f"Onboarding API client initialized for URL: {self.base_url}")
@@ -76,11 +76,10 @@ class OnboardingApiClient:
             json=json_data,
             files=files,
             data=metadata,
-            verify=False,
         )
         try:
             resp.raise_for_status()
-        except requests.HTTPError:
+        except httpx.HTTPStatusError:
             log.error(f"HTTP {resp.status_code} on {url}: {resp.text}")
             raise
 
@@ -307,7 +306,7 @@ class OnboardingApiClient:
                 token=self._customer_auth_token,
             )
             return status or {}
-        except requests.HTTPError as e:
+        except httpx.HTTPStatusError as e:
             code = e.response.status_code
             # Extract the text or JSON “error” field
             try:

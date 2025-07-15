@@ -4,7 +4,7 @@ import logging
 import sys
 import time
 
-import requests
+import httpx
 
 import config
 from clients.mysql_client import mysql_cursor
@@ -122,7 +122,7 @@ def pipeline():
                     )
                     log.info(f"Upload in process: {info['file']})")
 
-            except requests.HTTPError as e:
+            except httpx.HTTPError as e:
                 log.error(
                     f"Upload failed: HTTP {e.response.status_code}\n{e.response.text}"
                 )
@@ -141,7 +141,7 @@ def pipeline():
 
                 try:
                     status = client.file_upload_status()
-                except requests.HTTPError as e:
+                except httpx.HTTPError as e:
                     code = e.response.status_code
                     body = e.response.text
                     try:

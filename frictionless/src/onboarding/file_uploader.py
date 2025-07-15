@@ -2,7 +2,7 @@ import json
 import logging
 import sys
 
-import requests
+import httpx
 
 from src.onboarding.errors import FatalApiError, RetryableError
 
@@ -68,7 +68,7 @@ def upload_and_wait(
                 metadata={"description": file_info["description"], "fileCount": "1"},
             )
         log.info("Upload in process: %s", filename)
-    except requests.HTTPError as e:
+    except httpx.HTTPStatusError as e:
         log.error("Upload failed: HTTP %s\n%s", e.response.status_code, e.response.text)
         sys.exit(1)
 
