@@ -126,7 +126,7 @@ class OnboardingApiClient:
             json_data=partner_payload,
         )
 
-    # === Industry Details =====================================================
+    # === Industry Details =============================================================
 
     def list_industries(self) -> List[Dict[str, Any]]:
         """Retrieves all available industries (model templates)."""
@@ -155,7 +155,7 @@ class OnboardingApiClient:
             expected_key="data",
         )
 
-    # ==== Customer Creation ===================================================
+    # ==== Customer Creation ===========================================================
 
     def create_customer(self, customer_payload: Dict[str, Any]) -> Dict[str, Any]:
         """Creates a new customer under the partner account."""
@@ -180,7 +180,7 @@ class OnboardingApiClient:
         log.debug(f"Customer token generated: {token}")
         self._customer_auth_token = token
 
-    # === Product and Package ==================================================
+    # === Product and Package ==========================================================
 
     def list_products(self) -> List[Dict[str, Any]]:
         """Lists the available products that can be set for a customer."""
@@ -215,7 +215,7 @@ class OnboardingApiClient:
             "get", "/api/vendor/check-db", token=self._customer_auth_token
         )
 
-    # === Model Validation =====================================================
+    # === Model Validation =============================================================
 
     def list_kpis(self, industry_id: int) -> List[Dict[str, Any]]:
         """Lists all KPIs available for the customer."""
@@ -268,7 +268,7 @@ class OnboardingApiClient:
             json_data={"functionCode": function_code},
         )
 
-    # === Connect Data Sources =================================================
+    # === Connect Data Sources =========================================================
 
     def store_github_pat(self, pat: str) -> Dict[str, Any]:
         """Stores a GitHub Personal Access Token for the customer."""
@@ -329,7 +329,7 @@ class OnboardingApiClient:
             json_data=payload,
         )
 
-    # === Metric Compute =======================================================
+    # === Metric Compute ===============================================================
 
     def metric_compute(self):
         return self._request(
@@ -375,7 +375,18 @@ class OnboardingApiClient:
             },
         )
 
-    # === Misc =================================================================
+    # === Publish ======================================================================
+
+    def publish(self, ext_batch_id: str) -> List[Dict[str, Any]]:
+        """Publishes the computed metrics."""
+        return self._request(
+            "post",
+            "/api/vendor/compute/publish",
+            token=self._auth_token,
+            json_data={"ext_batch_id": ext_batch_id},
+        )
+
+    # === Misc =========================================================================
 
     def list_partners(self) -> List[Dict[str, Any]]:
         """Retrieves a list of all partner accounts accessible by the user."""
