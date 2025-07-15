@@ -21,7 +21,9 @@ from src.onboarding.metrics import (
 )
 from src.onboarding.package import set_package, set_product
 from src.onboarding.poller import wait_for
+from src.onboarding.publish import publish_metrics
 from utils.async_helpers import file_upload_wrapper
+from utils.helpers import confirm_with_timeout
 from utils.logger import setup_logging
 from utils.model_validation import validate_model
 
@@ -147,6 +149,23 @@ def metric_compute(ctx):
     status = fetch_compute_job_status(client, job_id)
     click.echo(json.dumps(status, indent=2))
 
+    # Option to publish metrics (with timeout)
+    if confirm_with_timeout("Publish the computed metrics?", timeout=15, default=True):
+        publish_metrics(client, job_id)
+        click.echo("Metrics published.")
+    else:
+        click.echo("You can publish metrics later using `cli.py publish --job-id`.")
+
+
+@cli.command()
+@click.pass_context
+@click.option("--job-id", required=True, help="Job ID for the metric computation.")
+def publish(ctx, job_id):
+    """Publish the metric computation for the given job ID."""
+    client = ctx.obj["client"]
+    publish_metrics(client, job_id)
+    click.echo("Metrics published")
+
 
 @cli.command()
 @click.pass_context
@@ -156,7 +175,11 @@ def cleanup(ctx, yes):
     cfg = ctx.obj["cfg"]
     client = ctx.obj["client"]
 
-    if yes or click.confirm(f"Delete customer {cfg.NEW_CUSTOMER_PAYLOAD['email']}?"):
+    if yes or confirm_with_timeout(
+        f"Delete customer {cfg.NEW_CUSTOMER_PAYLOAD['email']}?",
+        timeout=15,
+        default=False,
+    ):
         success = delete_customer(client, cfg.NEW_CUSTOMER_PAYLOAD["email"])
         if not success:
             sys.exit(1)
