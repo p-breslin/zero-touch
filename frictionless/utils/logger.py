@@ -1,5 +1,8 @@
+import datetime
 import logging
 import sys
+
+from scripts.paths import DATA_DIR
 
 
 class CustomFormatter(logging.Formatter):
@@ -49,34 +52,47 @@ class CustomFormatter(logging.Formatter):
 
 def setup_logging(
     level: int = logging.INFO,
-    stream=None,
+    stream: bool = True,
+    label: str = None,
 ) -> None:
-    """Initializes the root logger with a custom formatter and optional output stream.
-
-    Applies different formats based on severity, suppresses noisy third-party logs,
-    and clears preexisting handlers to avoid duplication.
+    """Configures the root logger with a custom formatter and optional file output.
 
     Args:
         level (int): Minimum log level to process (default: INFO).
-        stream (Optional[Any]): If provided, logs are written to sys.stdout. Otherwise, no default stream handler is added.
+        stream (bool): If True, logs are written to stdout.
+        label: (str, ptional): If provided, save logs to file using label as prefix.
     """
-    # Get the root logger
     root_logger = logging.getLogger()
 
     # Clear any existing handlers to prevent duplicate logs
     if root_logger.hasHandlers():
         root_logger.handlers.clear()
 
-    # Create a handler to output to the console
-    handler = logging.StreamHandler(sys.stdout if stream else None)
+    # Custom formatter to be set for the handler
+    formatter = CustomFormatter()
 
-    # Set our custom formatter on the handler
-    handler.setFormatter(CustomFormatter())
+    # Stream handler to console (stdout)
+    if stream:
+        stream_handler = logging.StreamHandler(sys.stdout)
+        stream_handler.setFormatter(formatter)
+        root_logger.addHandler(stream_handler)
 
-    # Add the configured handler to the root logger
-    root_logger.addHandler(handler)
+    # Save logs to file
+    if not stream or label:
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
+        if label:
+            log_name = f"{label}_{timestamp}.log"
+        else:
+            log_name = f"logs_{timestamp}.log"
 
-    # Set the minimum level of logs to process
+        savepath = DATA_DIR / "logs" / log_name
+        savepath.parent.mkdir(parents=True, exist_ok=True)
+
+        file_handler = logging.FileHandler(savepath, mode="a", encoding="utf-8")
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
+
+    # Minimum level of logs to process
     root_logger.setLevel(level)
 
     # Quieten noisy libraries
