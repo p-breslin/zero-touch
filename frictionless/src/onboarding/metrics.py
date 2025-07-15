@@ -49,7 +49,7 @@ def wait_for_compute_completion(
         The final aggregation entry dict when compute is complete.
     """
 
-    def predicate_fn() -> PollResult:
+    def poll_status() -> PollResult:
         try:
             summary = client.compute_summary(jobId=job_id)
         except Exception as e:
@@ -72,7 +72,7 @@ def wait_for_compute_completion(
         return PollResult(done=False)
 
     final = wait_for(
-        predicate_fn,
+        poll_status,
         interval=interval,
         timeout=timeout,
         on_retry=lambda _: None,
