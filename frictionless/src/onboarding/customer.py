@@ -3,6 +3,8 @@ import logging
 
 from clients.mysql_client import mysql_cursor
 
+from .poller import PollResult
+
 log = logging.getLogger(__name__)
 
 
@@ -24,6 +26,24 @@ def create_customer(client, payload: dict) -> dict:
         "Email": resp.get("email"),
     }
     log.info("Customer created:\n%s", json.dumps(summary, indent=2))
+
+
+def poll_customer_db(client) -> PollResult:
+    """
+    PollResult that returns done=True once the customer's DB exists.
+
+    Args:
+        client (OnboardingApiClient): Authenticated API client.
+
+    Returns:
+        PollResult: done=True when payload['db_exists'] is truthy, else done=False.
+    """
+    status = client.check_db_status()
+    payload = status.get("payload", {}) or {}
+    if payload.get("db_exists"):
+        return PollResult(done=True, value=payload)
+    log.debug("DB not ready yet, will retry.")
+    return PollResult(done=False)
 
 
 def generate_customer_token(client, email: str) -> None:
