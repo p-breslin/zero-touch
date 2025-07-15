@@ -11,7 +11,7 @@ class PollResult:
     Attributes:
         done (bool): True if polling should stop.
         value: The value to return when done is True.
-        info: Optional metadata or status info from predicate_fn.
+        info: Optional metadata or status info from the predicate.
     """
 
     def __init__(self, done: bool, value=None, info=None):
@@ -21,25 +21,31 @@ class PollResult:
 
 
 def wait_for(
-    predicate_fn, interval: float, timeout: float, on_retry=None, on_timeout=None
+    poll_status,
+    *poll_args,
+    interval: float,
+    timeout: float,
+    on_retry=None,
+    on_timeout=None,
 ):
-    """Polls a specified API over a time-range.
+    """Generic polling loop.
 
-    Repeatedly calls `predicate_fn` until it returns a PollResult with done=True or
-    until the timeout is reached.
+    Repeatedly calls `poll_status(*poll_args)` until it returns a PollResult with done=True or until the timeout is reached.
 
     Args:
-        predicate_fn (callable[[], PollResult]): A zero-argument function that returns a PollResult.
+        poll_status (callable): Function returning PollResult.
+        *poll_args: Positional args to pass into poll_status on each call.
         interval (float): Seconds to wait between calls.
         timeout (float): Maximum total seconds to poll before aborting.
-        on_retry (callable[[PollResult], None], optional): Called after each   unsuccessful PollResult, before sleeping
-        on_timeout (callable[[float], None], optional): Called once with elapsed time
-        if timeout is exceeded.
+        on_retry (callable[[PollResult], None], optional):
+            Called with the last PollResult before each sleep.
+        on_timeout (callable[[float], None], optional):
+            Called with elapsed seconds if timeout is exceeded.
 
     Returns:
         The `.value` attribute from the successful PollResult.
 
-    Exits with sys.exit(1) if the timeout is exceeded.
+    Exits via sys.exit(1) if the timeout is exceeded.
     """
     start = time.time()
     while True:
@@ -50,7 +56,7 @@ def wait_for(
             log.error("Polling timed out after %.1f seconds", elapsed)
             sys.exit(1)
 
-        result = predicate_fn()
+        result = poll_status(*poll_args)
         if result.done:
             return result.value
 
