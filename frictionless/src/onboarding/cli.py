@@ -44,14 +44,16 @@ async def async_upload_data(client, infos, cfg):
     return await asyncio.gather(*tasks)
 
 
-@click.group()
+@click.group(invoke_without_command=True)
 @click.pass_context  # shares the setup for every command
 def cli(ctx):
     """Onboarding toolkit for xFlow."""
     cfg = config
     client = authenticate(cfg)
-    generate_customer_token(client, cfg.NEW_CUSTOMER_PAYLOAD["email"])
     ctx.obj = {"cfg": cfg, "client": client}
+
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
 
 
 @cli.command()
@@ -61,8 +63,11 @@ def setup_customer(ctx):
     cfg = ctx.obj["cfg"]
     client = ctx.obj["client"]
 
-    # Customer creation
+    # Customer & token creation
     create_customer(client, cfg.NEW_CUSTOMER_PAYLOAD)
+    generate_customer_token(client, cfg.NEW_CUSTOMER_PAYLOAD["email"])
+
+    # Set tier
     set_product(client, cfg.SET_PRODUCT_PAYLOAD)
     set_package(client, cfg.SET_PACKAGE_PAYLOAD)
 
@@ -85,6 +90,7 @@ def model_validation(ctx):
     """Validates the model selected for the newly created customer."""
     cfg = ctx.obj["cfg"]
     client = ctx.obj["client"]
+    generate_customer_token(client, cfg.NEW_CUSTOMER_PAYLOAD["email"])
     validate_model(client, cfg.NEW_CUSTOMER_PAYLOAD["industryId"])
 
 
@@ -94,6 +100,7 @@ def sync_upload_data(ctx):
     """Synchronously uploads data for the created customer."""
     cfg = ctx.obj["cfg"]
     client = ctx.obj["client"]
+    generate_customer_token(client, cfg.NEW_CUSTOMER_PAYLOAD["email"])
     for info in (cfg.DEMO_DATA_INFO, cfg.KPI_DATA_INFO):
         upload_and_wait(
             client,
@@ -111,6 +118,7 @@ def upload_data(ctx):
     """Asynchronously uploads data for the created customer."""
     cfg = ctx.obj["cfg"]
     client = ctx.obj["client"]
+    generate_customer_token(client, cfg.NEW_CUSTOMER_PAYLOAD["email"])
     asyncio.run(async_upload_data(client, (cfg.DEMO_DATA_INFO, cfg.KPI_DATA_INFO), cfg))
     click.echo("All files uploaded.")
 
@@ -121,6 +129,7 @@ def metric_compute(ctx):
     """Compute metrics for the customer."""
     cfg = ctx.obj["cfg"]
     client = ctx.obj["client"]
+    generate_customer_token(client, cfg.NEW_CUSTOMER_PAYLOAD["email"])
 
     # Kick off the compute and get the external job ID
     job_id = compute_metrics(client)
@@ -159,52 +168,16 @@ def cleanup(ctx, yes):
 @click.pass_context
 def run_onboarding(ctx):
     """Runs the full onboarding pipeline end-to-end."""
-    cfg = ctx.obj["cfg"]
-    client = ctx.obj["client"]
+    ctx.invoke(setup_customer)
+    ctx.invoke(model_validation)
+    ctx.invoke(upload_data)
+    ctx.invoke(metric_compute)
 
-    # 1) Customer creation
-    create_customer(client, cfg.NEW_CUSTOMER_PAYLOAD)
-
-    # 2) Product & package
-    set_product(client, cfg.SET_PRODUCT_PAYLOAD)
-    set_package(client, cfg.SET_PACKAGE_PAYLOAD)
-
-    # 3) Wait for DB initialization
-    wait_for(
-        poll_customer_db,
-        interval=cfg.POLLING_INTERVAL_SECONDS,
-        timeout=cfg.TIMEOUT_SECONDS / 2,
-        on_retry=lambda res: click.echo("DB not ready; retrying...", err=True),
-        on_timeout=lambda sec: click.echo(
-            f"DB polling timed out after {sec:.1f}s", err=True
-        ),
-    )
-    click.echo("Database ready")
-
-    # 4) Model validation
-    validate_model(client, cfg.NEW_CUSTOMER_PAYLOAD["industryId"])
-    click.echo("Model validated")
-
-    # 5) Async file upload
-    asyncio.run(async_upload_data(client, (cfg.DEMO_DATA_INFO, cfg.KPI_DATA_INFO), cfg))
-    click.echo("Files uploaded")
-
-    # 6) Metric compute
-    job_id = compute_metrics(client)
-    wait_for_compute_completion(
-        client,
-        job_id,
-        interval=cfg.POLLING_INTERVAL_SECONDS,
-        timeout=cfg.TIMEOUT_SECONDS * 2,
-    )
-    click.echo("Metrics computed")
-
-    # 7) (Optional) cleanup
-    if click.confirm("Delete this customer now?"):
-        delete_customer(client, cfg.NEW_CUSTOMER_PAYLOAD["email"])
-        click.echo("Customer deleted")
+    # Customer deletion?
+    if click.confirm("Delete this customer?"):
+        ctx.invoke(cleanup, yes=True)
     else:
-        click.echo("Skipped cleanup")
+        click.echo("Skipped cleanup.")
 
 
 if __name__ == "__main__":
