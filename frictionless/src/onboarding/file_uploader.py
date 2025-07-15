@@ -76,7 +76,6 @@ def upload_and_wait(
     final_entry = wait_for(
         poll_file_upload,
         client,  # poll arg
-        file_info,  # poll arg
         interval=interval,
         timeout=timeout,
         on_retry=lambda _: log.info("Waiting for stats-processed..."),

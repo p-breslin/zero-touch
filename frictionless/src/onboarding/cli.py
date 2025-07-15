@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import sys
 
@@ -18,11 +19,27 @@ from src.onboarding.metrics import (
 )
 from src.onboarding.package import set_package, set_product
 from src.onboarding.poller import PollResult, wait_for
+from utils.async_helpers import file_upload_wrapper
 from utils.logger import setup_logging
 from utils.model_validation import validate_model
 
 setup_logging()
 log = logging.getLogger(__name__)
+
+
+# Asynchronous functions
+async def async_upload_data(client, infos, cfg):
+    tasks = [
+        file_upload_wrapper(
+            client,
+            info,
+            cfg.FILE_UPLOAD_PATH,
+            cfg.POLLING_INTERVAL_SECONDS,
+            cfg.TIMEOUT_SECONDS,
+        )
+        for info in infos
+    ]
+    return await asyncio.gather(*tasks)
 
 
 @click.group()
@@ -74,8 +91,8 @@ def model_validation():
 
 
 @cli.command()
-def upload_data():
-    """Uploads data for the created customer."""
+def sync_upload_data():
+    """Synchronously uploads data for the created customer."""
     cfg = config
     client = authenticate(cfg)
     generate_customer_token(client, cfg.NEW_CUSTOMER_PAYLOAD["email"])
@@ -87,6 +104,16 @@ def upload_data():
             interval=cfg.POLLING_INTERVAL_SECONDS,
             timeout=cfg.TIMEOUT_SECONDS,
         )
+    log.info("All files uploaded.")
+
+
+@cli.command()
+def upload_data():
+    """Asynchronously uploads data for the created customer."""
+    cfg = config
+    client = authenticate(cfg)
+    generate_customer_token(client, cfg.NEW_CUSTOMER_PAYLOAD["email"])
+    asyncio.run(async_upload_data(client, (cfg.DEMO_DATA_INFO, cfg.KPI_DATA_INFO), cfg))
     log.info("All files uploaded.")
 
 
