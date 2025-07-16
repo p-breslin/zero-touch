@@ -3,8 +3,8 @@ import logging
 import sys
 import time
 
-import config
 from clients.onboarding_client import OnboardingApiClient
+from configs import cfg
 from utils.logger import setup_logging
 
 setup_logging()
@@ -13,11 +13,11 @@ log = logging.getLogger(__name__)
 
 def poll_db():
     """Polls the API for the database creation status for a new customer."""
-    customer_email = config.NEW_CUSTOMER_PAYLOAD["email"]
+    customer_email = cfg.NEW_CUSTOMER_PAYLOAD["email"]
     client = OnboardingApiClient(
-        base_url=config.ONBOARDING_API_URL,
-        email=config.ADMIN_EMAIL,
-        password=config.ADMIN_PASSWORD,
+        base_url=cfg.ONBOARDING_API_URL,
+        email=cfg.ADMIN_EMAIL,
+        password=cfg.ADMIN_PASSWORD,
     )
 
     try:
@@ -29,14 +29,14 @@ def poll_db():
 
         # 2) Start the polling loop
         start_time = time.time()
-        timeout_seconds = config.TIMEOUT_MINUTES * 60
+        timeout_seconds = cfg.TIMEOUT_MINUTES * 60
 
         while True:
             # Check for timeout
             elapsed_time = time.time() - start_time
             if elapsed_time > timeout_seconds:
                 log.error(
-                    f"Timeout of {config.TIMEOUT_MINUTES} minutes exceeded. Halting."
+                    f"Timeout of {cfg.TIMEOUT_MINUTES} minutes exceeded. Halting."
                 )
                 raise TimeoutError("Database creation did not complete in time.")
 
@@ -54,9 +54,9 @@ def poll_db():
 
             log.info(
                 f"DB not ready yet (Message: '{status_response.get('payload')}'). "
-                f"Waiting {config.POLLING_INTERVAL_SECONDS} seconds..."
+                f"Waiting {cfg.POLLING_INTERVAL_SECONDS} seconds..."
             )
-            time.sleep(config.POLLING_INTERVAL_SECONDS)
+            time.sleep(cfg.POLLING_INTERVAL_SECONDS)
 
         log.info("--- Database is ready for data upload. ---")
 

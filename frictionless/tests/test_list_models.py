@@ -1,8 +1,8 @@
 import json
 import logging
 
-import config
 from clients.onboarding_client import OnboardingApiClient
+from configs import cfg
 from utils.logger import setup_logging
 
 setup_logging()
@@ -16,9 +16,9 @@ def fetch_models():
     try:
         # Initialize the client
         client = OnboardingApiClient(
-            base_url=config.ONBOARDING_API_URL,
-            email=config.ADMIN_EMAIL,
-            password=config.ADMIN_PASSWORD,
+            base_url=cfg.ONBOARDING_API_URL,
+            email=cfg.ADMIN_EMAIL,
+            password=cfg.ADMIN_PASSWORD,
         )
 
         # Authenticate

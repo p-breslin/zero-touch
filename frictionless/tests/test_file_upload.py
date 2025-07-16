@@ -6,8 +6,8 @@ import time
 import requests
 from dotenv import load_dotenv
 
-import config
 from clients.onboarding_client import OnboardingApiClient
+from configs import cfg
 from utils.logger import setup_logging
 
 load_dotenv()
@@ -33,12 +33,12 @@ kpi_data = {
 def main():
     # Initialize and authenticate
     client = OnboardingApiClient(
-        base_url=config.ONBOARDING_API_URL,
-        email=config.ADMIN_EMAIL,
-        password=config.ADMIN_PASSWORD,
+        base_url=cfg.ONBOARDING_API_URL,
+        email=cfg.ADMIN_EMAIL,
+        password=cfg.ADMIN_PASSWORD,
     )
     client.authenticate()
-    client.generate_customer_token(customer_email=config.NEW_PARTNER_PAYLOAD["email"])
+    client.generate_customer_token(customer_email=cfg.NEW_PARTNER_PAYLOAD["email"])
 
     for meta in (demo_data, kpi_data):
         try:
@@ -71,8 +71,8 @@ def main():
 
         # Poll upload status
         start = time.time()
-        timeout = config.TIMEOUT_SECONDS
-        interval = config.POLLING_INTERVAL_SECONDS
+        timeout = cfg.TIMEOUT_SECONDS
+        interval = cfg.POLLING_INTERVAL_SECONDS
         log.info("Polling for file upload completion...")
 
         while True:

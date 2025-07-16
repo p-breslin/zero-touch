@@ -6,9 +6,9 @@ import time
 
 import httpx
 
-import config
 from clients.mysql_client import mysql_cursor
 from clients.onboarding_client import OnboardingApiClient
+from configs import cfg
 from utils.logger import setup_logging
 from utils.model_validation import validate_model
 
@@ -19,15 +19,15 @@ def pipeline():
     try:
         # 1) Initialize & authenticate ======
         client = OnboardingApiClient(
-            base_url=config.ONBOARDING_API_URL,
-            email=config.ADMIN_EMAIL,
-            password=config.ADMIN_PASSWORD,
+            base_url=cfg.ONBOARDING_API_URL,
+            email=cfg.ADMIN_EMAIL,
+            password=cfg.ADMIN_PASSWORD,
         )
         log.info("Authenticating partner...")
         client.authenticate()
 
         # 2) Create a customer ======
-        customer_payload = dict(config.NEW_CUSTOMER_PAYLOAD)
+        customer_payload = dict(cfg.NEW_CUSTOMER_PAYLOAD)
         log.debug("Customer payload:\n" + json.dumps(customer_payload, indent=2))
         log.info("Creating customer...")
         customer_resp = client.create_customer(customer_payload)
@@ -52,7 +52,7 @@ def pipeline():
         log.debug("Customer token obtained.")
 
         # 4) Set product ======
-        product_payload = dict(config.SET_PRODUCT_PAYLOAD)
+        product_payload = dict(cfg.SET_PRODUCT_PAYLOAD)
         log.debug("Set-product payload:\n" + json.dumps(product_payload, indent=2))
         log.info("Setting product...")
         product_resp = client.set_product(product_payload)
@@ -60,7 +60,7 @@ def pipeline():
         log.debug("Set-product response:\n" + json.dumps(product_resp, indent=2))
 
         # 5) Set package ======
-        package_payload = dict(config.SET_PACKAGE_PAYLOAD)
+        package_payload = dict(cfg.SET_PACKAGE_PAYLOAD)
         log.debug("Set-package payload:\n" + json.dumps(package_payload, indent=2))
         log.info("Setting package...")
         package_resp = client.set_package(package_payload)
@@ -69,8 +69,8 @@ def pipeline():
 
         # 6) Poll for database creation ======
         start_time = time.time()
-        timeout = config.TIMEOUT_SECONDS / 2
-        interval = config.POLLING_INTERVAL_SECONDS
+        timeout = cfg.TIMEOUT_SECONDS / 2
+        interval = cfg.POLLING_INTERVAL_SECONDS
         log.info("Polling for database creation...")
 
         while True:
@@ -94,17 +94,17 @@ def pipeline():
             time.sleep(interval)
 
         # 7) Validate model ======
-        validate_model(client, config.NEW_CUSTOMER_PAYLOAD["industryId"])
+        validate_model(client, cfg.NEW_CUSTOMER_PAYLOAD["industryId"])
 
         log.info(
             "\nOnboarding complete: model, product, and package have been set. Customer database successfully created."
         )
 
         # 8) File upload (skipping datasource connection for now) ======
-        for info in (config.DEMO_DATA_INFO, config.KPI_DATA_INFO):
+        for info in (cfg.DEMO_DATA_INFO, cfg.KPI_DATA_INFO):
             try:
                 # File must be opened in binary mode
-                with open(f"{config.FILE_UPLOAD_PATH}{info['file']}", "rb") as fp:
+                with open(f"{cfg.FILE_UPLOAD_PATH}{info['file']}", "rb") as fp:
                     files = {
                         "file1": (
                             info["file"],
@@ -130,7 +130,7 @@ def pipeline():
 
             # Poll upload status
             start = time.time()
-            timeout = config.TIMEOUT_SECONDS
+            timeout = cfg.TIMEOUT_SECONDS
             log.info("Polling for file upload completion...")
 
             while True:
@@ -196,8 +196,8 @@ def pipeline():
 
         # Poll compute status
         start = time.time()
-        timeout = config.TIMEOUT_SECONDS * 8
-        interval = config.POLLING_INTERVAL_SECONDS
+        timeout = cfg.TIMEOUT_SECONDS * 8
+        interval = cfg.POLLING_INTERVAL_SECONDS
         log.info(f"Polling for metric compute completion (jobId = '{job_id}')...")
 
         while True:
@@ -254,7 +254,7 @@ def pipeline():
 
             # Fetch the customer details
             customers = client.list_customers()
-            customer_email = config.NEW_CUSTOMER_PAYLOAD["email"]
+            customer_email = cfg.NEW_CUSTOMER_PAYLOAD["email"]
             record = next((c for c in customers if c["email"] == customer_email), None)
 
             if record:

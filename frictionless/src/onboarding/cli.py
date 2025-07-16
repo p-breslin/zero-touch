@@ -5,7 +5,7 @@ import sys
 
 import click
 
-import config
+from configs import cfg
 from src.onboarding.auth import authenticate
 from src.onboarding.customer import (
     create_customer,
@@ -50,7 +50,6 @@ async def async_upload_data(client, infos, cfg):
 @click.pass_context  # shares the setup for every command
 def cli(ctx):
     """Onboarding toolkit for xFlow."""
-    cfg = config
     client = authenticate(cfg)
     click.echo("Client authenticated")
     ctx.obj = {"cfg": cfg, "client": client}

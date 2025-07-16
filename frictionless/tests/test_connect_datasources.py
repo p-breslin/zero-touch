@@ -3,8 +3,8 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 
-import config
 from clients.onboarding_client import OnboardingApiClient
+from configs import cfg
 from utils.data_source_definition import active_repos, jira_projects
 from utils.logger import setup_logging
 
@@ -19,23 +19,23 @@ start_time_str = start_time_obj.strftime("%Y-%m-%dT%H:%M:%SZ")
 def connect_sources():
     """Runs the full sequence of connecting both GitHub and Jira data sources."""
     client = OnboardingApiClient(
-        base_url=config.ONBOARDING_API_URL,
-        email=config.ADMIN_EMAIL,
-        password=config.ADMIN_PASSWORD,
+        base_url=cfg.ONBOARDING_API_URL,
+        email=cfg.ADMIN_EMAIL,
+        password=cfg.ADMIN_PASSWORD,
     )
     client.authenticate()
 
     try:
         # Generate the Customer-scoped token
-        CUSTOMER_EMAIL = config.NEW_CUSTOMER_PAYLOAD["email"]
+        CUSTOMER_EMAIL = cfg.NEW_CUSTOMER_PAYLOAD["email"]
         client.generate_customer_token(CUSTOMER_EMAIL)
 
-        # Connect GitHub (2-step: Auth then Config)
+        # Connect GitHub (2-step: Auth then cfg)
         log.info("\n[CONNECTING GITHUB - STEP 1/2: STORING PAT]")
         repos = active_repos(DAYS_BACK)
         GITHUB_CONNECT_PAYLOAD = {
             "source_name": "GitHub",
-            "source_config": {
+            "source_cfg": {
                 "repository": " ".join(repos),
                 "start_date": start_time_str,
             },
@@ -44,17 +44,17 @@ def connect_sources():
         gh_pat_resp = client.store_github_pat(os.getenv("GITHUB_PERSONAL_ACCESS_TOKEN"))
         log.info("GitHub connect response:\n" + json.dumps(gh_pat_resp, indent=2))
 
-        log.info("\n[CONNECTING GITHUB - STEP 2/2: SENDING CONFIG]")
+        log.info("\n[CONNECTING GITHUB - STEP 2/2: SENDING cfg]")
         gh_connect_resp = client.connect_data_source(GITHUB_CONNECT_PAYLOAD)
         log.info("GitHub Connect response:\n" + json.dumps(gh_connect_resp, indent=2))
 
-        # Connect Jira (1-step: Combined Auth/Config)
+        # Connect Jira (1-step: Combined Auth/cfg)
         log.info("\n[CONNECTING]: Jira")
         project_keys = jira_projects()
 
         JIRA_CONNECT_PAYLOAD = {
             "source_name": "Jira",
-            "source_config": {
+            "source_cfg": {
                 "email": os.getenv("JIRA_USERNAME"),
                 "domain": os.getenv("JIRA_SERVER_URL"),
                 "projects": project_keys,

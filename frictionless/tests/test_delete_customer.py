@@ -6,8 +6,8 @@ import sys
 import mysql.connector
 from dotenv import load_dotenv
 
-import config
 from clients.onboarding_client import OnboardingApiClient
+from configs import cfg
 from utils.logger import setup_logging
 
 load_dotenv()
@@ -17,12 +17,11 @@ log = logging.getLogger(__name__)
 
 def main():
     """Deletes a customer and partner account."""
-
-    customer_email = config.NEW_CUSTOMER_PAYLOAD["email"]
+    customer_email = cfg.NEW_CUSTOMER_PAYLOAD["email"]
     client = OnboardingApiClient(
-        base_url=config.ONBOARDING_API_URL,
-        email=config.ADMIN_EMAIL,
-        password=config.ADMIN_PASSWORD,
+        base_url=cfg.ONBOARDING_API_URL,
+        email=cfg.ADMIN_EMAIL,
+        password=cfg.ADMIN_PASSWORD,
     )
 
     try:

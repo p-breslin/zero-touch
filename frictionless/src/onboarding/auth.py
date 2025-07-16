@@ -1,22 +1,22 @@
 import logging
 from typing import Any, Optional
 
-import config
 from clients.onboarding_client import OnboardingApiClient
+from configs import cfg
 
 log = logging.getLogger(__name__)
 
 
-def authenticate(cfg: Optional[Any] = None):
+def authenticate(config: Optional[Any] = None):
     """Authenticates against the Onboarding API.
 
     Args:
-        cfg (Optional[Any]): Optional configuration module or object. If not provided, the top-level `config` module is used.
+        config (Optional[Any]): Optional configuration module or object. If not provided, the top-level `cfg` module is used.
 
     Returns:
         An instance of OnboardingApiClient with a valid session.
     """
-    cfg = cfg or config
+    config = config or cfg
 
     client = OnboardingApiClient(
         base_url=cfg.ONBOARDING_API_URL,

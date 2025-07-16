@@ -4,8 +4,8 @@ import logging
 import sys
 import time
 
-import config
 from clients.onboarding_client import OnboardingApiClient
+from configs import cfg
 from utils.logger import setup_logging
 
 setup_logging(level=2)
@@ -73,9 +73,9 @@ def main():
 
     log.debug("Initializing OnboardingApiClient..")
     client = OnboardingApiClient(
-        base_url=config.ONBOARDING_API_URL,
-        email=config.ADMIN_EMAIL,
-        password=config.ADMIN_PASSWORD,
+        base_url=cfg.ONBOARDING_API_URL,
+        email=cfg.ADMIN_EMAIL,
+        password=cfg.ADMIN_PASSWORD,
     )
 
     try:
@@ -89,7 +89,7 @@ def main():
         chosen_model_id = select_id(model_map, args.model_id, "Model")
 
         # 3) Prepare the payload and create the customer with chosen model
-        customer_payload = dict(config.NEW_CUSTOMER_PAYLOAD)
+        customer_payload = dict(cfg.NEW_CUSTOMER_PAYLOAD)
         customer_payload["industryId"] = chosen_model_id
         log.debug("Customer payload:\n" + json.dumps(customer_payload, indent=2))
         log.info("Creating customer..")
@@ -108,7 +108,7 @@ def main():
         chosen_product_id = select_id(product_map, args.product_id, "Product")
 
         # 6) Set the product for the customer
-        product_payload = dict(config.SET_PRODUCT_PAYLOAD)
+        product_payload = dict(cfg.SET_PRODUCT_PAYLOAD)
         product_payload["product_name"] = product_map[chosen_product_id]
         log.debug("Set-product payload:\n" + json.dumps(product_payload, indent=2))
         log.info("Setting product..")
@@ -116,7 +116,7 @@ def main():
         log.debug(f"Set-product response:\n{json.dumps(product_resp, indent=2)}")
 
         # 7) Set the package for the customer
-        package_payload = dict(config.SET_PACKAGE_PAYLOAD)
+        package_payload = dict(cfg.SET_PACKAGE_PAYLOAD)
         log.debug("Set-package payload:\n" + json.dumps(package_payload, indent=2))
         log.info("Setting package..")
         package_resp = client.set_package(customer_token, package_payload)
@@ -124,14 +124,14 @@ def main():
 
         # 8) Poll the status of the customer database creation
         start_time = time.time()
-        timeout_seconds = config.TIMEOUT_MINUTES * 60
+        timeout_seconds = cfg.TIMEOUT_MINUTES * 60
 
         log.info("Polling for database creation..")
         while True:
             elapsed = time.time() - start_time
             if elapsed > timeout_seconds:
                 log.error(
-                    f"Timeout of {config.TIMEOUT_MINUTES} minutes exceeded; aborting."
+                    f"Timeout of {cfg.TIMEOUT_MINUTES} minutes exceeded; aborting."
                 )
                 sys.exit(1)
 
@@ -145,9 +145,9 @@ def main():
 
             log.info(
                 f"Database not ready (message: {status.get('payload')}). "
-                f"Retrying in {config.POLLING_INTERVAL_SECONDS}s.."
+                f"Retrying in {cfg.POLLING_INTERVAL_SECONDS}s.."
             )
-            time.sleep(config.POLLING_INTERVAL_SECONDS)
+            time.sleep(cfg.POLLING_INTERVAL_SECONDS)
 
         log.info(
             "Onboarding complete: model, product, and package have been set. Customer database successfully created."

@@ -3,8 +3,8 @@ import logging
 import sys
 from collections import defaultdict
 
-import config
 from clients.onboarding_client import OnboardingApiClient
+from configs import cfg
 from utils.logger import setup_logging
 
 setup_logging()
@@ -15,11 +15,11 @@ def main():
     """Validates that a newly created customer's environment has been correctly instantiated from the selected model template."""
     log.info("=== Starting Model Validation Script")
 
-    customer_email = config.NEW_CUSTOMER_PAYLOAD["email"]
+    customer_email = cfg.NEW_CUSTOMER_PAYLOAD["email"]
     client = OnboardingApiClient(
-        base_url=config.ONBOARDING_API_URL,
-        email=config.ADMIN_EMAIL,
-        password=config.ADMIN_PASSWORD,
+        base_url=cfg.ONBOARDING_API_URL,
+        email=cfg.ADMIN_EMAIL,
+        password=cfg.ADMIN_PASSWORD,
     )
 
     try:
@@ -27,7 +27,7 @@ def main():
         log.info("Authenticating partner and customer tokens...")
         client.authenticate()
         customer_token = client.generate_customer_token(customer_email)
-        industry_id = config.NEW_CUSTOMER_PAYLOAD["industryId"]
+        industry_id = cfg.NEW_CUSTOMER_PAYLOAD["industryId"]
 
         # 2) Validate KPIs
         log.info("Validating KPIs...")
