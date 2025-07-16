@@ -1,9 +1,10 @@
-import sys
 import json
-import config
 import logging
-from utils.logger import setup_logging
+import sys
+
+import config
 from clients.onboarding_client import OnboardingApiClient
+from utils.logger import setup_logging
 
 setup_logging()
 log = logging.getLogger(__name__)
@@ -11,7 +12,6 @@ log = logging.getLogger(__name__)
 
 def main():
     """Deletes a partner account."""
-
     customer_email = config.NEW_CUSTOMER_PAYLOAD["email"]
     client = OnboardingApiClient(
         base_url=config.ONBOARDING_API_URL,

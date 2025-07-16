@@ -1,19 +1,18 @@
-import sys
 import json
-import config
 import logging
+import sys
 from collections import defaultdict
-from utils.logger import setup_logging
+
+import config
 from clients.onboarding_client import OnboardingApiClient
+from utils.logger import setup_logging
 
 setup_logging()
 log = logging.getLogger(__name__)
 
 
 def main():
-    """
-    Validates that a newly created customer's environment has been correctly instantiated from the selected model template.
-    """
+    """Validates that a newly created customer's environment has been correctly instantiated from the selected model template."""
     log.info("=== Starting Model Validation Script")
 
     customer_email = config.NEW_CUSTOMER_PAYLOAD["email"]

@@ -1,8 +1,9 @@
 import json
-import config
 import logging
-from utils.logger import setup_logging
+
+import config
 from clients.onboarding_client import OnboardingApiClient
+from utils.logger import setup_logging
 
 setup_logging()
 log = logging.getLogger(__name__)

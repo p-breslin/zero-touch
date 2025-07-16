@@ -1,11 +1,12 @@
-import sys
-import json
-import time
-import config
-import logging
 import argparse
-from utils.logger import setup_logging
+import json
+import logging
+import sys
+import time
+
+import config
 from clients.onboarding_client import OnboardingApiClient
+from utils.logger import setup_logging
 
 setup_logging(level=2)
 log = logging.getLogger(__name__)

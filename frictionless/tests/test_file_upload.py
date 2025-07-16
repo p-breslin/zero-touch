@@ -1,12 +1,14 @@
-import sys
 import json
-import time
-import config
 import logging
+import sys
+import time
+
 import requests
 from dotenv import load_dotenv
-from utils.logger import setup_logging
+
+import config
 from clients.onboarding_client import OnboardingApiClient
+from utils.logger import setup_logging
 
 load_dotenv()
 setup_logging()

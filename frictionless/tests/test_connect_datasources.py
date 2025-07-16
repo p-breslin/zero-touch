@@ -1,11 +1,12 @@
-import os
 import json
-import config
 import logging
-from utils.logger import setup_logging
+import os
 from datetime import datetime, timedelta, timezone
+
+import config
 from clients.onboarding_client import OnboardingApiClient
-from utils.data_source_definition import jira_projects, active_repos
+from utils.data_source_definition import active_repos, jira_projects
+from utils.logger import setup_logging
 
 setup_logging(level=2)
 log = logging.getLogger(__name__)
@@ -16,9 +17,7 @@ start_time_str = start_time_obj.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def connect_sources():
-    """
-    Runs the full sequence of connecting both GitHub and Jira data sources.
-    """
+    """Runs the full sequence of connecting both GitHub and Jira data sources."""
     client = OnboardingApiClient(
         base_url=config.ONBOARDING_API_URL,
         email=config.ADMIN_EMAIL,

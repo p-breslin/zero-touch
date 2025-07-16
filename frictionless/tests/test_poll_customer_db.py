@@ -1,10 +1,11 @@
-import sys
 import json
-import time
-import config
 import logging
-from utils.logger import setup_logging
+import sys
+import time
+
+import config
 from clients.onboarding_client import OnboardingApiClient
+from utils.logger import setup_logging
 
 setup_logging()
 log = logging.getLogger(__name__)
@@ -12,7 +13,6 @@ log = logging.getLogger(__name__)
 
 def poll_db():
     """Polls the API for the database creation status for a new customer."""
-
     customer_email = config.NEW_CUSTOMER_PAYLOAD["email"]
     client = OnboardingApiClient(
         base_url=config.ONBOARDING_API_URL,
@@ -53,7 +53,7 @@ def poll_db():
                 break
 
             log.info(
-                f"Database not ready yet (Message: '{status_response.get('payload')}'). "
+                f"DB not ready yet (Message: '{status_response.get('payload')}'). "
                 f"Waiting {config.POLLING_INTERVAL_SECONDS} seconds..."
             )
             time.sleep(config.POLLING_INTERVAL_SECONDS)
