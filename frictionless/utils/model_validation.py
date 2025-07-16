@@ -9,8 +9,7 @@ log = logging.getLogger(__name__)
 def validate_model(client, industry_id):
     """Checks the attributes for a customer model.
 
-    Validates that a newly created customer's environment has been instantiated
-    correctly from the selected industry model template.
+    Validates that a newly created customer's environment has been instantiated correctly from the selected industry model template.
 
     Performs validation across:
         1. KPIs — Verifies that KPIs were correctly generated.

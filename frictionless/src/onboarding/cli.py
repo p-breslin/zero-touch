@@ -27,7 +27,7 @@ from utils.helpers import confirm_with_timeout
 from utils.logger import setup_logging
 from utils.model_validation import validate_model
 
-setup_logging()
+setup_logging(stream=False)
 log = logging.getLogger(__name__)
 
 
@@ -52,6 +52,7 @@ def cli(ctx):
     """Onboarding toolkit for xFlow."""
     cfg = config
     client = authenticate(cfg)
+    click.echo("Client authenticated")
     ctx.obj = {"cfg": cfg, "client": client}
 
     if ctx.invoked_subcommand is None:
@@ -66,24 +67,29 @@ def setup_customer(ctx):
     client = ctx.obj["client"]
 
     # Customer & token creation
-    create_customer(client, cfg.NEW_CUSTOMER_PAYLOAD)
+    click.echo(f"Creating customer for {cfg.NEW_CUSTOMER_PAYLOAD['email']}")
+    resp = create_customer(client, cfg.NEW_CUSTOMER_PAYLOAD)
+
+    click.echo(f"Company Name: {resp['Company']}")
+    click.echo(f"Industry: {resp['Industry']}")
     generate_customer_token(client, cfg.NEW_CUSTOMER_PAYLOAD["email"])
 
     # Set tier
     set_product(client, cfg.SET_PRODUCT_PAYLOAD)
     set_package(client, cfg.SET_PACKAGE_PAYLOAD)
 
+    click.echo("Setting up customer database...")
     wait_for(
         poll_customer_db,
         client,
         interval=cfg.POLLING_INTERVAL_SECONDS,
         timeout=cfg.TIMEOUT_SECONDS / 2,
-        on_retry=lambda _: click.echo("Database not ready; retrying...", err=True),
+        on_retry=lambda _: click.echo("Database not ready", err=True),
         on_timeout=lambda e: click.echo(
             f"DB polling timed out after {e:.1f}s", err=True
         ),
     )
-    click.echo("Database is ready.")
+    click.echo("Customer database ready")
 
 
 @cli.command()
@@ -93,6 +99,7 @@ def model_validation(ctx):
     cfg = ctx.obj["cfg"]
     client = ctx.obj["client"]
     generate_customer_token(client, cfg.NEW_CUSTOMER_PAYLOAD["email"])
+    click.echo("Validating the model...")
     validate_model(client, cfg.NEW_CUSTOMER_PAYLOAD["industryId"])
 
 
@@ -103,6 +110,8 @@ def sync_upload_data(ctx):
     cfg = ctx.obj["cfg"]
     client = ctx.obj["client"]
     generate_customer_token(client, cfg.NEW_CUSTOMER_PAYLOAD["email"])
+
+    click.echo("Uploading data files...")
     for info in (cfg.DEMO_DATA_INFO, cfg.KPI_DATA_INFO):
         upload_and_wait(
             client,
@@ -111,7 +120,7 @@ def sync_upload_data(ctx):
             interval=cfg.POLLING_INTERVAL_SECONDS,
             timeout=cfg.TIMEOUT_SECONDS,
         )
-    click.echo("All files uploaded.")
+    click.echo("All files uploaded")
 
 
 @cli.command()
@@ -121,8 +130,9 @@ def upload_data(ctx):
     cfg = ctx.obj["cfg"]
     client = ctx.obj["client"]
     generate_customer_token(client, cfg.NEW_CUSTOMER_PAYLOAD["email"])
+    click.echo("Uploading data files...")
     asyncio.run(async_upload_data(client, (cfg.DEMO_DATA_INFO, cfg.KPI_DATA_INFO), cfg))
-    click.echo("All files uploaded.")
+    click.echo("All data files uploaded")
 
 
 @cli.command()
@@ -134,6 +144,7 @@ def metric_compute(ctx):
     generate_customer_token(client, cfg.NEW_CUSTOMER_PAYLOAD["email"])
 
     # Kick off the compute and get the external job ID
+    click.echo("Computing metrics...")
     job_id = compute_metrics(client)
 
     # Poll until the compute job completes
@@ -152,9 +163,9 @@ def metric_compute(ctx):
     # Option to publish metrics (with timeout)
     if confirm_with_timeout("Publish the computed metrics?", timeout=15, default=True):
         publish_metrics(client, job_id)
-        click.echo("Metrics published.")
+        click.echo("Metrics published")
     else:
-        click.echo("You can publish metrics later using `cli.py publish --job-id`.")
+        click.echo("You can publish metrics later using `cli.py publish --job-id`")
 
 
 @cli.command()
@@ -163,6 +174,7 @@ def metric_compute(ctx):
 def publish(ctx, job_id):
     """Publish the metric computation for the given job ID."""
     client = ctx.obj["client"]
+    click.echo("Publishing metrics...")
     publish_metrics(client, job_id)
     click.echo("Metrics published")
 
@@ -179,6 +191,7 @@ def cleanup(ctx, yes):
         success = delete_customer(client, cfg.NEW_CUSTOMER_PAYLOAD["email"])
         if not success:
             sys.exit(1)
+        click.echo("Customer deleted.")
     else:
         click.echo("Cleanup aborted.")
 

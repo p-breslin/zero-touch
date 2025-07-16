@@ -14,6 +14,9 @@ def create_customer(client, payload: dict):
     Args:
         client (OnboardingApiClient): Authenticated OnboardingApiClient instance.
         payload (dict): Dict matching the NEW_CUSTOMER_PAYLOAD schema.
+
+    Returns:
+        dict: Brief details of the created customer.
     """
     log.debug("Customer payload:\n%s", json.dumps(payload, indent=2))
     log.info("Creating customer...")
@@ -26,6 +29,7 @@ def create_customer(client, payload: dict):
         "Email": resp.get("email"),
     }
     log.info("Customer created:\n%s", json.dumps(summary, indent=2))
+    return summary
 
 
 def poll_customer_db(client) -> PollResult:
