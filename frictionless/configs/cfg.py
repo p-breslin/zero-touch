@@ -79,7 +79,7 @@ KPI_DATA_INFO = {
 # Connection details for the ArangoDB instance where graphs are stored
 ARANGO_HOST = "http://arangodb.in.dev.xflow/"
 ARANGO_USER = "root"
-ARANGO_PASSWORD = "Dm6UjGZMMwmje"
+ARANGO_PASSWORD = ""
 
 # Graph engine API settings
 EDNS_GRAPH_API_BASE_URL = "http://graph.in.dev.xflow"
